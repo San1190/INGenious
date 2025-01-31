@@ -1,19 +1,18 @@
 package com.ing.engine.commands.webservice;
 
-import com.ing.engine.commands.General;
+import com.ing.engine.commands.browser.General;
 import com.ing.engine.constants.FilePath;
 import com.ing.engine.core.CommandControl;
 import com.ing.engine.core.Control;
 import com.ing.engine.support.Status;
 import com.ing.engine.support.methodInf.Action;
 import com.ing.engine.support.methodInf.InputType;
-import com.ing.engine.support.methodInf.ObjectType;										  
+import com.ing.engine.support.methodInf.ObjectType;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.net.InetSocketAddress;
 import java.net.ProxySelector;
 import java.net.URI;
-import javax.net.ssl.*;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -47,6 +46,9 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.xpath.XPathExpressionException;
 import org.json.simple.JSONArray;
@@ -54,8 +56,6 @@ import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.w3c.dom.DOMException;
 import org.xml.sax.SAXException;
-								 
-									
 
 public class Webservice extends General {
 
@@ -68,7 +68,8 @@ public class Webservice extends General {
         PUT,
         PATCH,
         GET,
-        DELETE
+        DELETE,
+        DELETEWITHPAYLOAD
     }
 
     @Action(object = ObjectType.WEBSERVICE, desc = "PUT Rest Request ", input = InputType.YES, condition = InputType.OPTIONAL)
@@ -130,6 +131,16 @@ public class Webservice extends General {
         }
     }
 
+    @Action(object = ObjectType.WEBSERVICE, desc = "DELETE with Payload ", input = InputType.YES)
+    public void deleteWithPayload() {
+        try {
+            createhttpRequest(RequestMethod.DELETEWITHPAYLOAD);
+        } catch (InterruptedException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+    }
+
     @Action(object = ObjectType.WEBSERVICE, desc = "Assert Response Code ", input = InputType.YES)
     public void assertResponseCode() {
         try {
@@ -144,7 +155,6 @@ public class Webservice extends General {
             Report.updateTestLog(Action, "Error in validating response code :" + "\n" + ex.getMessage(), Status.DEBUG);
         }
     }
-
 
     @Action(object = ObjectType.WEBSERVICE, desc = "Assert Response Body contains ", input = InputType.YES)
     public void assertResponsebodycontains() {
@@ -418,17 +428,16 @@ public class Webservice extends General {
     private void returnResponseDetails() throws IOException, InterruptedException {
 
         initiateClientBuilder();
+        sslCertificateVerification();
         handleProxy();
 
         /**
          * *** need to add timeout,version******
          */
-	 
         httpClient.put(key, httpClientBuilder.get(key).build());
         httpRequest.put(key, httpRequestBuilder.get(key).build());
         response.put(key, httpClient.get(key).send(httpRequest.get(key), HttpResponse.BodyHandlers.ofString()));
 
-		
         responsebodies.put(key, (String) response.get(key).body());
 
         after.put(key, Instant.now());
@@ -437,8 +446,6 @@ public class Webservice extends General {
         responsecodes.put(key, Integer.toString(response.get(key).statusCode()));
 
     }
-
-	
 
     @Action(object = ObjectType.WEBSERVICE, desc = "Assert JSON Element Count ", input = InputType.YES, condition = InputType.YES)
     public void assertJSONelementCount() {
@@ -601,8 +608,6 @@ public class Webservice extends General {
                 }
             }
 
-														  
-
             if (headers.containsKey(key)) {
                 headers.get(key).add(Data);
             } else {
@@ -657,7 +662,7 @@ public class Webservice extends General {
         try {
             ArrayList<String> params = urlParams.get(key);
             for (String param : params) {
-                parameters.put(param.split("=")[0], param.split("=")[1]);
+                parameters.put(param.split("=", 2)[0], param.split("=", 2)[1]);
             }
             urlParamString = parameters.entrySet()
                     .stream()
@@ -668,7 +673,6 @@ public class Webservice extends General {
         }
         return urlParamString;
     }
-
 
     @Action(object = ObjectType.WEBSERVICE, desc = "Close the connection ", input = InputType.NO)
     public void closeConnection() {
@@ -769,17 +773,15 @@ public class Webservice extends General {
                 System.out.println(headerlist);
                 if (headerlist.size() > 0) {
                     headerlist.forEach((header) -> {
-                       httpRequestBuilder.put(key, httpRequestBuilder.get(key).setHeader(header.substring(0,header.indexOf("=")),header.substring(header.indexOf("=")+1,header.length())));
+                        httpRequestBuilder.put(key, httpRequestBuilder.get(key).setHeader(header.substring(0, header.indexOf("=")), header.substring(header.indexOf("=") + 1, header.length())));
                     });
                 }
             }
-            
+
         } catch (Exception ex) {
             Logger.getLogger(this.getClass().getName()).log(Level.OFF, ex.getMessage(), ex);
         }
     }
-
-
 
     private void httpAgentCheck() {
         try {
@@ -821,6 +823,11 @@ public class Webservice extends General {
                     httpRequestBuilder.put(key, httpRequestBuilder.get(key).DELETE());
                     break;
                 }
+                case "DELETEWITHPAYLOAD": {
+                    httpRequestBuilder.put(key, httpRequestBuilder.get(key).method("DELETE", payloadBody));
+                    savePayload("request", payload);
+                    break;
+                }
 
             }
             headers.remove(key);
@@ -831,11 +838,11 @@ public class Webservice extends General {
     }
 
     private void setRequestMethod(RequestMethod requestmethod) throws FileNotFoundException {
-        if (requestmethod.toString().equals("PUT") || requestmethod.toString().equals("POST") || requestmethod.toString().equals("PATCH")) {
+        if (requestmethod.toString().equals("PUT") || requestmethod.toString().equals("POST") || requestmethod.toString().equals("PATCH") || requestmethod.toString().equals("DELETEWITHPAYLOAD")) {
 
             setRequestMethod(requestmethod.toString(), handlePayloadorEndpoint(Data));
         } else {
-			  
+
             setRequestMethod(requestmethod.toString(), "");
         }
     }
@@ -917,7 +924,7 @@ public class Webservice extends General {
             e.printStackTrace();
         }
     }
-    
+
     private void handleProxy() {
         try {
             if (getProxyDetails() != null) {
@@ -935,6 +942,37 @@ public class Webservice extends General {
         } catch (Exception ex) {
             Logger.getLogger(this.getClass().getName()).log(Level.OFF, ex.getMessage(), ex);
         }
+    }
+
+    TrustManager[] trustAllCerts = new TrustManager[]{new X509TrustManager() {
+        @Override
+        public X509Certificate[] getAcceptedIssuers() {
+            return null;
+        }
+
+        @Override
+        public void checkClientTrusted(X509Certificate[] certs, String authType) {
+        }
+
+        @Override
+        public void checkServerTrusted(X509Certificate[] certs, String authType) {
+        }
+    }};
+
+    private void sslCertificateVerification() {
+        try {
+            if (!isSSLCertificateVerification()) {
+                SSLContext sc = SSLContext.getInstance("TLS");
+                sc.init(null, trustAllCerts, new SecureRandom());
+                httpClientBuilder.put(key, httpClientBuilder.get(key).sslContext(sc));
+            }
+        } catch (Exception ex) {
+            Logger.getLogger(this.getClass().getName()).log(Level.OFF, ex.getMessage(), ex);
+        }
+    }
+    
+    private Boolean isSSLCertificateVerification() {
+        return Control.getCurrentProject().getProjectSettings().getDriverSettings().sslCertificateVerification();
     }
 
 }

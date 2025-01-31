@@ -1,7 +1,7 @@
 
 package com.ing.engine.support.reflect;
 
-import com.ing.engine.commands.Command;
+import com.ing.engine.commands.browser.Command;
 import com.ing.engine.constants.FilePath;
 import com.ing.engine.constants.SystemDefaults;
 import com.google.common.base.Predicate;
@@ -67,7 +67,7 @@ public class ClassFinder {
 
     private static List<Class<?>> checkJarFile(String jf, String[] pkgs)
             throws IOException {
-        LOG.log(Level.INFO, "Finding Commands in {0}", jf);
+       // LOG.log(Level.INFO, "Finding Commands in {0}", jf);
         List<Class<?>> classes = new ArrayList<>();
         try (JarFile jarFile = new JarFile(jf)) {
             Enumeration<JarEntry> entries = jarFile.entries();

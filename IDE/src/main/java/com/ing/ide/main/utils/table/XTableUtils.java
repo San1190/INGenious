@@ -23,6 +23,7 @@ public class XTableUtils {
     private static final Clipboard CLIPBOARD = Toolkit.getDefaultToolkit().getSystemClipboard();
 
     public static void copyToClipboard(JTable table, boolean isCut) {
+        
         int numCols = table.getSelectedColumnCount();
         int numRows = table.getSelectedRowCount();
         int[] rowsSelected = table.getSelectedRows();
@@ -100,4 +101,5 @@ public class XTableUtils {
             ((UndoRedoModel) table.getModel()).stopGroupEdit();
         }
     }
+    
 }

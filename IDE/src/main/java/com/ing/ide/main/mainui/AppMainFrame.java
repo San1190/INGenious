@@ -20,7 +20,7 @@ import com.ing.ide.main.dashboard.server.DashBoardManager;
 import com.ing.ide.main.mainui.components.DashBoard;
 import com.ing.ide.main.mainui.components.testdesign.TestDesign;
 import com.ing.ide.main.mainui.components.testexecution.TestExecution;
-//import com.ing.ide.main.shr.SHR;
+import com.ing.ide.main.shr.SHR;
 import com.ing.ide.main.ui.About;
 import com.ing.ide.main.ui.StartUp;
 import com.ing.ide.main.utils.LoaderScreen;
@@ -74,7 +74,7 @@ public class AppMainFrame extends JFrame {
 
     private final DashBoardManager dashBoardManager;
 
-//    private final SHR spyHealReco;
+    private final SHR spyHealReco;
 
     private final AppActionListener sActionListener;
 
@@ -107,7 +107,11 @@ public class AppMainFrame extends JFrame {
         recentItems = new RecentItems(this);
         startUp = new StartUp(this);
         progressed(25);
-        sActionListener = new AppActionListener(this);
+        
+        toolBar = new AppToolBar(null);
+        sActionListener = new AppActionListener(this, toolBar);
+        toolBar.setActionListener(sActionListener);
+        
         slideShow = new SlideShow();
         docker = new SimpleDock(this);
         progressed(35);
@@ -118,10 +122,10 @@ public class AppMainFrame extends JFrame {
         dashBoard = new DashBoard(testExecution);
         progressed(60);
         dashBoardManager = new DashBoardManager(this);
-//        spyHealReco = new SHR(this);
+        spyHealReco = new SHR(this);
         progressed(70);
         menuBar = new AppMenuBar(sActionListener);
-        toolBar = new AppToolBar(sActionListener);
+       // toolBar = new AppToolBar(sActionListener);
         stepMap = new StepMap();
         loader = new LoaderScreen();
         progressed(75);
@@ -200,6 +204,7 @@ public class AppMainFrame extends JFrame {
     public void showTestExecution() {
         getGlassPane().setVisible(false);
         slideShow.showSlide("TestExecution");
+        testExecution.getTestExecutionUI().adjustUI();
     }
 
     public void showDashBoard() {
@@ -246,10 +251,10 @@ public class AppMainFrame extends JFrame {
     public DashBoardManager getDashBoardManager() {
         return dashBoardManager;
     }
-//
-//    public SHR getSpyHealReco() {
-//        return spyHealReco;
-//    }
+
+   public SHR getSpyHealReco() {
+       return spyHealReco;
+   }
 
     public RecentItems getRecentItems() {
         return recentItems;
@@ -304,9 +309,6 @@ public class AppMainFrame extends JFrame {
         final String _Enc = " Enc";
         boolean isMigrted = true;
         try {
-            //Mail Settings updated
-            project.getProjectSettings().getMailSettings().put("mail.smtp.starttls.required", "true");
-            Logger.getLogger(AppMainFrame.class.getName()).log(Level.INFO, "Mail setting new property is copied ");
 
             //Updating new TM Properties
             List<TestMgModule> modules = project.getProjectSettings().getTestMgmtModule().getModules();
@@ -544,13 +546,19 @@ public class AppMainFrame extends JFrame {
     private void load() {
         testDesign.load();
         testExecution.load();
-//        spyHealReco.load();
+        spyHealReco.load();
     }
 
     public void save() {
         if (sProject != null) {
             saveLoadedProject();
             Notification.show("Project [" + sProject.getName() + "] Saved");
+        }
+    }
+    
+    public void autoSave() {
+        if (sProject != null) {
+            saveLoadedProject();
         }
     }
 

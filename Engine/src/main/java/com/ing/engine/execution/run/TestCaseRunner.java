@@ -1,4 +1,3 @@
-
 package com.ing.engine.execution.run;
 
 import com.ing.datalib.component.Project;
@@ -12,6 +11,8 @@ import com.ing.engine.execution.data.StepSet;
 import com.ing.engine.execution.exception.DriverClosedException;
 import com.ing.engine.execution.exception.ForcedException;
 import com.ing.engine.execution.exception.TestFailedException;
+import com.ing.engine.execution.exception.ActionException;
+import com.ing.engine.execution.exception.AppiumDriverException;
 import com.ing.engine.execution.exception.UnCaughtException;
 import com.ing.engine.execution.exception.data.DataNotFoundException;
 import com.ing.engine.execution.exception.data.GlobalDataNotFoundException;
@@ -45,7 +46,7 @@ public class TestCaseRunner {
     private final Parameter parameter;
     private final TestRunner exe;
     private DataIterator iterater;
-    private final Map<String,Object> varMap= new HashMap<>();
+    private final Map<String, Object> varMap = new HashMap<>();
     private int iter = -1;
 
     private TestCaseRunner context;
@@ -161,7 +162,7 @@ public class TestCaseRunner {
     }
 
     public CommandControl createControl(final TestCaseRunner newThis) {
-        return new CommandControl(getRoot().getControl().Playwright,getRoot().getControl().Page,getRoot().getControl().BrowserContext, getRoot().getControl().Report) {
+        return new CommandControl(getRoot().getControl().Playwright, getRoot().getControl().Page, getRoot().getControl().BrowserContext, getRoot().getControl().webDriver, getRoot().getControl().Report) {
             @Override
             public void execute(String com, int sub) {
                 newThis.runTestCase(com, sub);
@@ -263,7 +264,8 @@ public class TestCaseRunner {
 
     //<editor-fold defaultstate="collapsed" desc="error handling">
     private void onError(Throwable ex) {
-        reportOnError(getStepName(), ex.getMessage(), Status.FAIL);
+        if (!ex.getMessage().contains("ActionException"))
+          reportOnError(getStepName(), ex.getMessage(), Status.DEBUG);
         if (exe.isContinueOnError()) {
             LOG.log(Level.SEVERE, ex.getMessage(), Optional.ofNullable(ex.getCause()).orElse(ex));
         } else {
@@ -278,6 +280,13 @@ public class TestCaseRunner {
         reportOnError(getStepName(), ex.getMessage(), Status.FAIL);
         if (exe.isContinueOnError()) {
             LOG.log(Level.SEVERE, ex.getMessage(), ex);
+        } else {
+            throw new TestFailedException(scenario(), testcase(), ex);
+        }
+    }
+
+    private void onPlaywrightException(RuntimeException ex) {
+        if (exe.isContinueOnError()) {
         } else {
             throw new TestFailedException(scenario(), testcase(), ex);
         }
@@ -351,6 +360,8 @@ public class TestCaseRunner {
                         }
                     } catch (ForcedException | ElementException ex) {
                         onRuntimeException(ex);
+                    } catch (ActionException ex) {
+                        onPlaywrightException(ex);
                     } catch (Throwable ex) {
                         onError(ex);
                     }

@@ -5,7 +5,7 @@ import com.ing.datalib.component.Scenario;
 import com.ing.datalib.component.TestCase;
 import com.ing.datalib.settings.RunSettings;
 import com.ing.engine.constants.SystemDefaults;
-import com.ing.engine.drivers.PlaywrightDriver;
+import com.ing.engine.drivers.PlaywrightDriverCreation;
 import com.ing.engine.execution.data.Parameter;
 import com.ing.engine.execution.data.UserDataAccess;
 import com.ing.engine.execution.exception.DriverClosedException;
@@ -20,14 +20,17 @@ import java.util.Date;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import com.ing.engine.drivers.WebDriverCreation;
+
 public class Task implements Runnable {
 
     TestCaseReport report;
     RunContext runContext;
-    PlaywrightDriver playwrightDriver;
+    PlaywrightDriverCreation playwrightDriver;
     DateTimeUtils runTime;
     UserDataAccess userData;
     TestCaseRunner runner;
+    WebDriverCreation webDriver;
 
     public Task(RunContext RC) {
         runContext = RC;
@@ -64,9 +67,11 @@ public class Task implements Runnable {
 
         while (!SystemDefaults.stopExecution.get() && iter <= runner.getMaxIter()) {
             try {
-                System.out.println("Running Iteration " + iter);
+                System.out.println("👉 Running Iteration " + iter);
                 runIteration(iter++);
-                closePlaywrightInstance(iter-1);
+                if (isPlaywrightExecution()) {
+                    closePlaywrightInstance(iter - 1);
+                }
             } catch (Exception ex) {
                 LOG.log(Level.SEVERE, ex.getMessage(), ex);
             }
@@ -123,11 +128,16 @@ public class Task implements Runnable {
 
     public boolean runIteration(int iter) {
         boolean success = false;
-        playwrightDriver = getDriver();
         try {
             SystemDefaults.reportComplete.set(true);
             report.startIteration(iter);
-            launchBrowser();
+            if (isPlaywrightExecution()) {
+                playwrightDriver = getPlaywrightDriver();
+                launchPlaywright();
+            } else  {
+                webDriver = getWebDriver();
+                launchWebDriver();
+            }
             SystemDefaults.stopCurrentIteration.set(false);
             runner.run(createControl(), iter);
             success = true;
@@ -141,29 +151,59 @@ public class Task implements Runnable {
         } catch (Throwable ex) {
             onError(ex, "Error", ex.getMessage());
         } finally {
-            if (playwrightDriver != null && !getRunSettings().useExistingDriver()) {
-                try {
-                    playwrightDriver.closeBrowser();
-                } catch (Exception ex) {
-                    System.out.println("Driver Closed Unexpectedly");
-                    onError(ex, "Driver Error", ex.getMessage());
-                    LOG.log(Level.SEVERE, ex.getMessage(), ex);
-                }
+            if (isPlaywrightExecution()) {
+              closePlaywrightDriver();
             }
+            else {
+                closeWebDriver();
+            }
+                
             report.endIteration(iter);
         }
+
         return success;
     }
 
-    private void launchBrowser() throws UnCaughtException {
+    private void closePlaywrightDriver() {
+        if (playwrightDriver != null && !getRunSettings().useExistingDriver()) {
+            try {
+                playwrightDriver.closeBrowser();
+            } catch (Exception ex) {
+                System.out.println("Driver Closed Unexpectedly");
+                onError(ex, "Driver Error", ex.getMessage());
+                LOG.log(Level.SEVERE, ex.getMessage(), ex);
+            }
+        }
+    }
+    
+    private void closeWebDriver() {
+        if (webDriver != null && !getRunSettings().useExistingDriver()) {
+            try {
+                webDriver.driver.quit();
+            } catch (Exception ex) {
+                System.out.println("Driver Closed Unexpectedly");
+                onError(ex, "Driver Error", ex.getMessage());
+                LOG.log(Level.SEVERE, ex.getMessage(), ex);
+            }
+        }
+    }
+
+    private void launchPlaywright() throws UnCaughtException {
         if (!getRunSettings().useExistingDriver() || playwrightDriver.page == null) {
             playwrightDriver.launchDriver(runContext);
         }
-        report.setDriver(playwrightDriver);
+        report.setPlaywrightDriver(playwrightDriver);
+    }
+
+    private void launchWebDriver() throws UnCaughtException {
+        if (!getRunSettings().useExistingDriver() || webDriver.driver == null) {
+            webDriver.launchDriver(runContext);
+        }
+        report.setWebDriver(webDriver);
     }
 
     private CommandControl createControl() {
-        return new CommandControl(playwrightDriver, playwrightDriver, playwrightDriver, report) {
+        return new CommandControl(playwrightDriver, playwrightDriver, playwrightDriver, webDriver, report) {
             @Override
             public void execute(String com, int sub) {
                 runner.runTestCase(com, sub);
@@ -198,16 +238,46 @@ public class Task implements Runnable {
         }
     }
 
-    private PlaywrightDriver getDriver() {
-        PlaywrightDriver seDriver;
+    private PlaywrightDriverCreation getPlaywrightDriver() {
+        PlaywrightDriverCreation playwrightDriver;
         if (!getRunSettings().useExistingDriver()
                 || Control.getPlaywrightDriver() == null) {
-            seDriver = new PlaywrightDriver();
-            Control.setSeDriver(seDriver);
+            playwrightDriver = new PlaywrightDriverCreation();
+            Control.setPlaywrightDriver(playwrightDriver);
         } else {
-            seDriver = Control.getPlaywrightDriver();
+            playwrightDriver = Control.getPlaywrightDriver();
         }
-        return seDriver;
+        return playwrightDriver;
+    }
+
+    private WebDriverCreation getWebDriver() {
+        WebDriverCreation webDriver;
+        if (!getRunSettings().useExistingDriver()
+                || Control.getWebDriver() == null) {
+            webDriver = new WebDriverCreation();
+            Control.setWebDriver(webDriver);
+        } else {
+            webDriver = Control.getWebDriver();
+        }
+        return webDriver;
+    }
+
+    public boolean isPlaywrightExecution() {
+        boolean isBrowserExecution = false;
+        try {
+            String browserName = runContext.BrowserName;
+            if (browserName.equals("Chromium") || browserName.equals("WebKit") || browserName.equals("Firefox")) {
+                isBrowserExecution = true;
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+        return isBrowserExecution;
+    }
+
+
+    public boolean isWebDriverExecution() {
+         return !isPlaywrightExecution();
     }
 
 }

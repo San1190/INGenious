@@ -1,18 +1,18 @@
-
 package com.ing.engine.reporting.impl.handlers;
 
 import com.ing.engine.core.RunContext;
-import com.ing.engine.drivers.PlaywrightDriver;
+import com.ing.engine.drivers.PlaywrightDriverCreation;
 import com.ing.engine.reporting.TestCaseReport;
 import com.ing.engine.reporting.intf.Report;
 import com.ing.engine.support.Status;
 import com.ing.engine.support.Step;
 import java.io.File;
 import java.util.List;
+import com.ing.engine.drivers.WebDriverCreation;
 
 /**
  *
- * 
+ *
  */
 public class TestCaseHandler implements Report {
 
@@ -23,7 +23,7 @@ public class TestCaseHandler implements Report {
     }
 
     @Override
-    public void startComponent(String component,String desc) {
+    public void startComponent(String component, String desc) {
 
     }
 
@@ -43,10 +43,15 @@ public class TestCaseHandler implements Report {
     }
 
     @Override
-    public PlaywrightDriver getDriver() {
-        return report.getDriver();
+    public PlaywrightDriverCreation getPlaywrightDriver() {
+        return report.getPlaywrightDriver();
     }
 
+    @Override
+    public WebDriverCreation getWebDriver() {
+        return report.getWebDriver();
+    }
+    
     @Override
     public String getScreenShotName() {
         return report.getScreenShotName();
@@ -86,8 +91,11 @@ public class TestCaseHandler implements Report {
         return null;
     }
 
-    public void setDriver(PlaywrightDriver driver) {
+    public void setPlaywrightDriver(PlaywrightDriverCreation driver) {
 
     }
 
+    public void setWebDriver(WebDriverCreation driver) {
+
+    }
 }

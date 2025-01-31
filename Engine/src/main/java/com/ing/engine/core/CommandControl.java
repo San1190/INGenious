@@ -4,9 +4,10 @@ package com.ing.engine.core;
 import com.ing.datalib.or.common.ObjectGroup;
 import com.ing.datalib.or.image.ImageORObject;
 import com.ing.datalib.settings.DriverSettings;
+import com.ing.datalib.util.data.LinkedProperties;
 import com.ing.engine.drivers.AutomationObject;
 import com.ing.engine.drivers.AutomationObject.FindType;
-import com.ing.engine.drivers.PlaywrightDriver;
+import com.ing.engine.drivers.PlaywrightDriverCreation;
 import com.ing.engine.execution.data.DataProcessor;
 import com.ing.engine.execution.data.UserDataAccess;
 import com.ing.engine.execution.exception.UnCaughtException;
@@ -19,12 +20,18 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Stack;
 
+//Added For Mobile
+import com.ing.engine.drivers.WebDriverCreation;
+import com.ing.engine.drivers.MobileObject;
+import com.ing.engine.drivers.MobileObject.FindmType;
+import java.util.Properties;
+import org.openqa.selenium.WebElement;
 
 public abstract class CommandControl {
 
-    public PlaywrightDriver Playwright;
-    public PlaywrightDriver Page;
-    public PlaywrightDriver BrowserContext;
+    public PlaywrightDriverCreation Playwright;
+    public PlaywrightDriverCreation Page;
+    public PlaywrightDriverCreation BrowserContext;
     public AutomationObject AObject;
     public String Data;
     public String Action;
@@ -41,18 +48,30 @@ public abstract class CommandControl {
     public UserDataAccess userData;
     private HashMap<String, String> runTimeVars = new HashMap<>();
     private Stack<Locator> runTimeElement = new Stack<>();
+    
+    public MobileObject MObject;
+    public WebDriverCreation webDriver;
+    public WebElement Element;
 
-    public CommandControl(PlaywrightDriver playwright, PlaywrightDriver page, PlaywrightDriver browserContext ,TestCaseReport report) {
+    public CommandControl(PlaywrightDriverCreation playwright, PlaywrightDriverCreation page, PlaywrightDriverCreation browserContext ,WebDriverCreation driver,TestCaseReport report) {
         Playwright = playwright;
         BrowserContext = browserContext;
         Page = page;
+        webDriver = driver;
         userData = new UserDataAccess() {
             @Override
             public TestCaseRunner context() {
                 return (TestCaseRunner) CommandControl.this.context();
             }
         };
-        AObject = new AutomationObject(Page.page);
+        if(webDriver==null)
+        {
+           AObject = new AutomationObject(Page.page); 
+        }
+        else if(webDriver!=null)
+        {
+           MObject=new MobileObject(webDriver.driver); 
+        }
         Report = (TestCaseReport) report;
 
     }
@@ -64,6 +83,8 @@ public abstract class CommandControl {
     }
 
     public void sync(Step curr) throws UnCaughtException {
+        if(webDriver==null)
+        {
         refresh();
         //AObject.setDriver(seDriver.driver);
         this.Description = curr.Description;
@@ -90,14 +111,64 @@ public abstract class CommandControl {
                         Locator = AObject.findElement(ObjectName, Reference, FindType.fromString(Condition));
                         
                     }
-                } else {
-                    imageObjectGroup = AObject.getImageObjects(Reference, ObjectName);
                 }
             }
         }
     }
+         else
+    { 
+       refresh();
+//        mobileObject.setDriver(mobileDriver.driver);
+        this.Description = curr.Description;
+        this.Action = curr.Action;
+        this.Input = curr.Input;
+        this.Data = curr.Data;
+
+        /********** Updates the Action for NLP_locator****************/
+        MobileObject.Action = this.Action;
+        /**************************************************************/
+
+        if (curr.Condition != null && curr.Condition.length() > 0) {
+            this.Condition = curr.Condition;
+        }
+
+        if (curr.ObjectName != null && curr.ObjectName.length() > 0) {
+            this.ObjectName = curr.ObjectName.trim();
+
+            if (!(ObjectName.matches("(?i:app|browser|execute|executeclass)"))) {
+                this.Reference = curr.Reference;
+                if (!curr.Action.startsWith("img")) {
+                    if (canIFindElement()) {
+                        Element = MObject.findElement(ObjectName, Reference, FindmType.fromString(Condition));
+
+
+                    }
+                }
+            }
+        } 
+    }
+    }
 
     private Boolean canIFindElement() {
+        if(webDriver!=null)
+        {
+        if(webDriver.isAlive())
+        {
+            if (webDriver.getCurrentBrowser().equalsIgnoreCase("ProtractorJS")) {
+                return false;
+            } else {
+                switch (Action) {
+                    case "waitForElementToBePresent":
+                    case "setObjectProperty":
+                        return false;
+                    default:
+                        return true;
+                }
+            }
+        }
+        }
+        else
+        {
         if (Page.isAlive()) {
                 switch (Action) {
                     case "waitForElementToBePresent":
@@ -107,6 +178,7 @@ public abstract class CommandControl {
                         return true;
                 }
             
+        }
         }
         return false;
     }
@@ -172,8 +244,12 @@ public abstract class CommandControl {
         return runTimeVars;
     }
 
-    public String getDataBaseProperty(String key) {
-        return Control.getCurrentProject().getProjectSettings().getDatabaseSettings().getProperty(key);
+    public String getDBFile(String value){
+        return Control.getCurrentProject().getProjectSettings().getDatabaseSettings().getDBLocation(value);
+    }
+
+    public Properties getDataBaseProperty(String key) {
+        return Control.getCurrentProject().getProjectSettings().getDatabaseSettings().getDBPropertiesFor(key);
     }
     
     public Map<String, String> getProxySettings() {

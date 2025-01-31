@@ -1,4 +1,3 @@
-
 package com.ing.engine.reporting.impl.html;
 
 import com.ing.datalib.util.data.FileScanner;
@@ -6,7 +5,8 @@ import com.ing.engine.constants.AppResourcePath;
 import com.ing.engine.constants.FilePath;
 import com.ing.engine.core.Control;
 import com.ing.engine.core.RunContext;
-import com.ing.engine.drivers.PlaywrightDriver;
+import com.ing.engine.drivers.PlaywrightDriverCreation;
+import com.ing.engine.drivers.WebDriverCreation;
 import com.ing.engine.reporting.TestCaseReport;
 import com.ing.engine.reporting.impl.handlers.PrimaryHandler;
 import com.ing.engine.reporting.impl.handlers.TestCaseHandler;
@@ -22,6 +22,8 @@ import java.util.List;
 import java.util.Stack;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import io.opentelemetry.exporter.logging.SystemOutLogRecordExporter;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 
@@ -58,10 +60,17 @@ public class HtmlTestCaseHandler extends TestCaseHandler implements PrimaryHandl
     }
 
     @Override
-    public void setDriver(PlaywrightDriver driver) {
-        testCaseData.put(TestCase.B_VERSION, getDriver().getBrowserVersion());
-//        testCaseData.put(TestCase.PLATFORM, getDriver().getPlatformName());
-        testCaseData.put(TestCase.BROWSER, getDriver().getCurrentBrowser());
+    public void setPlaywrightDriver(PlaywrightDriverCreation driver) {
+        testCaseData.put(TestCase.B_VERSION, getPlaywrightDriver().getBrowserVersion());
+        testCaseData.put(TestCase.PLATFORM, System.getProperty("os.name")+ " " +System.getProperty("os.version")+ " " +System.getProperty("os.arch"));
+        testCaseData.put(TestCase.BROWSER, getPlaywrightDriver().getCurrentBrowser());
+    }
+    
+    @Override
+    public void setWebDriver(WebDriverCreation driver) {
+        testCaseData.put(TestCase.B_VERSION, getWebDriver().getCurrentBrowserVersion());
+        testCaseData.put(TestCase.PLATFORM, getWebDriver().getPlatform());
+        testCaseData.put(TestCase.BROWSER, getWebDriver().getCurrentBrowser());
     }
 
     @Override
@@ -96,36 +105,46 @@ public class HtmlTestCaseHandler extends TestCaseHandler implements PrimaryHandl
             data.put(RDS.Step.Data.DESCRIPTION, ReportUtils.resolveDesc(stepDescription));
             data.put(RDS.Step.Data.TIME_STAMP, time);
             data.put(RDS.Step.Data.STATUS, state.toString());
-            
-            String payloadfiles="";
-            String filename="";
+
+            String payloadfiles = "";
+            String filename = "";
             if (link != null) {
-            	payloadfiles = testCaseData.get(TestCase.SCENARIO_NAME)
-      		             + "_"
-      		             + testCaseData.get(TestCase.TESTCASE_NAME)
-      		             + "_Step-"
-      		             + getStepCount()
-      		             + "_";
-            	filename=AppResourcePath.getCurrentResultsPath()+link+File.separator+payloadfiles;
+                payloadfiles = testCaseData.get(TestCase.SCENARIO_NAME)
+                        + "_"
+                        + testCaseData.get(TestCase.TESTCASE_NAME)
+                        + "_Step-"
+                        + getStepCount()
+                        + "_";
+                filename = AppResourcePath.getCurrentResultsPath() + link + File.separator + payloadfiles;
                 data.put(RDS.Step.Data.LINK, filename);
+               
             }
-            
-            
             /*if (link != null) {
                data.put(RDS.Step.Data.LINK, link);
             }*/
+            
             putStatus(state, links, link, data);
             if (isIteration) {
                 ((JSONArray) iteration.get(RDS.Step.DATA)).add(step);
             } else {
                 ((JSONArray) reusable.get(RDS.Step.DATA)).add(step);
             }
+            if (isVideoEnabled()) {
+                if (isIteration) {
+                    iteration.put(RDS.TestSet.VIDEO_REPORT_DIR, getPlaywrightDriver().page.video().path().toString());
+                } else {
+                    reusable.put(RDS.TestSet.VIDEO_REPORT_DIR, getPlaywrightDriver().page.video().path().toString());
+                }
+            }
         } catch (Exception ex) {
             LOG.log(Level.SEVERE, ex.getMessage(), ex);
         }
     }
-    
-    
+
+    private Boolean isVideoEnabled(){
+        return Control.exe.getExecSettings().getRunSettings().isVideoEnabled();
+    }
+
     /**
      * creates new iteration object
      *
@@ -188,7 +207,7 @@ public class HtmlTestCaseHandler extends TestCaseHandler implements PrimaryHandl
     }
 
     private void onSetpDone() {
-        DoneSteps++;                
+        DoneSteps++;
         if (reusable != null && reusable.get(TestCase.STATUS).equals("")) {
             reusable.put(TestCase.STATUS, "PASS");
         }
@@ -233,7 +252,7 @@ public class HtmlTestCaseHandler extends TestCaseHandler implements PrimaryHandl
             case FAILNS:
                 onSetpFailed();
                 break;
-            case COMPLETE:            
+            case COMPLETE:
                 break;
 
         }
@@ -290,7 +309,7 @@ public class HtmlTestCaseHandler extends TestCaseHandler implements PrimaryHandl
             if (optional != null) {
                 data.put(RDS.Step.Data.OBJECTS, optional.get(0));
             }
-            if (ReportUtils.takeScreenshot(getDriver(), imgSrc)) {
+            if (ReportUtils.takeScreenshot(getPlaywrightDriver(),getWebDriver(), imgSrc)) {
                 data.put(RDS.Step.Data.LINK, imgSrc);
             }
         }
