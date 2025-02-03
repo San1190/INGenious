@@ -261,6 +261,7 @@ public class AppMenuBar extends JMenuBar {
         JMenuItem testarMenu = new JMenu("TESTAR Scriptless");
         testarMenu.add(Utils.createMenuItem("TESTAR Execution", sActionListener));
         testarMenu.add(Utils.createMenuItem("TESTAR Reports", sActionListener));
+        testarMenu.add(Utils.createMenuItem("State Model Analysis", sActionListener));
         tools.add(testarMenu);
 
         return tools;

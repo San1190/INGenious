@@ -1,27 +1,29 @@
 package com.ing.ide.main.testar;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
+import com.ing.ide.main.testar.playwright.actions.PlaywrightClick;
+import com.ing.ide.main.testar.playwright.actions.PlaywrightFill;
+import com.ing.ide.main.testar.playwright.system.PlaywrightSUT;
+import com.ing.ide.main.testar.playwright.system.PlaywrightState;
+import com.ing.ide.main.testar.playwright.system.PlaywrightWidget;
+import com.ing.ide.main.testar.reporting.HtmlReport;
+import com.ing.ide.main.testar.statemodel.StateModelConfig;
+import com.microsoft.playwright.ElementHandle;
+import com.microsoft.playwright.Page;
 import org.apache.commons.lang3.RandomStringUtils;
-
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.testar.CodingManager;
+import org.testar.StateManagementTags;
+import org.testar.monkey.alayer.Action;
+import org.testar.monkey.alayer.Tag;
+import org.testar.monkey.alayer.Verdict;
+import org.testar.monkey.alayer.Widget;
+import org.testar.statemodel.StateModelManager;
+import org.testar.statemodel.StateModelManagerFactory;
 
-import com.ing.ide.main.testar.actions.TESTARAction;
-import com.ing.ide.main.testar.actions.TESTARActionClick;
-import com.ing.ide.main.testar.actions.TESTARActionFill;
-import com.ing.ide.main.testar.reporting.TESTARHtmlReport;
-import com.microsoft.playwright.Browser;
-import com.microsoft.playwright.BrowserType;
-import com.microsoft.playwright.ElementHandle;
-import com.microsoft.playwright.Page;
-import com.microsoft.playwright.Playwright;
-import com.microsoft.playwright.options.LoadState;
+import java.util.*;
+import java.util.regex.Pattern;
 
 public class TESTARtool {
 	private static final Logger logger = LogManager.getLogger();
@@ -41,79 +43,93 @@ public class TESTARtool {
 	}
 
 	public String generateSequence() {
-		// Initialize a TESTAR HTML report
-		TESTARHtmlReport htmlReport = new TESTARHtmlReport();
+		// TODO: Make a real configurable abstraction mechanism in Actions, Widget, State
+		// Abstraction settings
+		List<Tag<?>> tagList = Collections.singletonList(StateManagementTags.getTagFromSettingsString("WebWidgetId"));
+		Tag<?>[] abstractTags = tagList.toArray(new Tag<?>[0]);
+		CodingManager.setCustomTagsForConcreteId(abstractTags);
+		CodingManager.setCustomTagsForAbstractId(abstractTags);
 
-		// Initialize Playwright and launch Chromium
-		Playwright playwright = Playwright.create();
-		Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(false));
-		Page page = browser.newPage();
-		page.setDefaultTimeout(3000); // 3 seconds of timeout
+		// Initialize the State Model
+		StateModelManager stateModelManager = StateModelManagerFactory.getStateModelManager(
+				"model",
+				"1",
+				StateModelConfig.getDefaultConfig());
+		stateModelManager.notifyTestSequencedStarted();
+
+		// Initialize a TESTAR HTML report
+		HtmlReport htmlReport = new HtmlReport();
+
+		// Initialize the System Under Test
+		// which initializes Playwright and launch Chromium
+		PlaywrightSUT system = new PlaywrightSUT(webSUT);
+
+		// By default, the SUT does not contains failures
+		Verdict verdict = Verdict.OK;
 
 		try {
-			// Navigate to the webSUT URL
-			page.navigate(webSUT);
-
-			// Initial wait
-			page.waitForTimeout(2000);
-
-			// Wait for the page to finish loading 
-			page.waitForLoadState(LoadState.DOMCONTENTLOADED);
-			page.waitForLoadState(LoadState.NETWORKIDLE);
-			page.waitForLoadState(LoadState.LOAD);
-
-			// Trigger initial actions
-			triggerInitialActions(page, triggerActionsMap);
-
-			// Apply test oracles into the initial state
-			String verdict = getVerdict(page);
-			// If the test verdict is not OK, return the erroneous verdict
-			if(!verdict.equals("OK")) {
-				return verdict;
-			}
+			// Trigger initial actions (e.g., login)
+			triggerInitialActions(system, triggerActionsMap);
 
 			for(int i = 0; i < numberActions; i++) {
-				// Add an image of the state in the HTML report
-				htmlReport.addState(page.screenshot(), page.url());
-
-				// Derive TESTAR available actions to interact with web elements
-				List<TESTARAction> actions = deriveActions(page);
-
-				// Control the web page by checking the state contains available actions
-				actions = controlWebPage(page, actions);
-
-				// Write available derived actions in the HTML report
-				htmlReport.addDerivedActions(actions);
-
-				// Select one of available actions
-				TESTARAction selectedAction = selectRandomAction(actions);
-				htmlReport.addSelectedAction(selectedAction);
-
-				// Execute the selected action
-				executeAction(page, selectedAction);
+				// Get the State of the playwright page
+				PlaywrightState state = getState(system);
+				// Add the state information in the HTML report
+				htmlReport.addState(state);
 
 				// Apply test oracles into the state
-				verdict = getVerdict(page);
-				// If the test verdict is not OK, return the erroneous verdict
-				if(!verdict.equals("OK")) {
-					return verdict;
+				verdict = getVerdict(state);
+				// If the test verdict is not OK, return the failure verdict
+				if(!verdict.equals(Verdict.OK)) {
+					htmlReport.addFinalVerdict(verdict);
+					return verdict.toString();
 				}
+
+				// Derive TESTAR available actions to interact with web elements
+				Set<Action> actions = deriveActions(state);
+				// Control the web page by checking the state contains available actions
+				actions = controlWebPage(state, actions);
+				// Write available derived actions in the HTML report
+				htmlReport.addDerivedActions(actions);
+				// Save state and actions information into the state model
+				stateModelManager.notifyNewStateReached(state, actions);
+
+				// Select one of available actions
+				Action selectedAction = selectRandomAction(actions);
+				// Write selected action information in the HTML report
+				htmlReport.addSelectedAction(selectedAction);
+				// Save the selected action information into the state model
+				stateModelManager.notifyActionExecution(selectedAction);
+
+				// Execute the selected action
+				executeAction(system, state, selectedAction);
 			}
 
-			// Add an image of the final state in the HTML report
-			htmlReport.addState(page.screenshot(), page.url());
+			// Get the last state
+			PlaywrightState lastState = getState(system);
+			// Apply test oracles into the last state
+			verdict = getVerdict(lastState);
+			// Add the final state information in the HTML report
+			htmlReport.addState(lastState);
+			// Add the final verdict information in the HTML report
+			htmlReport.addFinalVerdict(verdict);
+			// Save the final state and actions into the state model
+			stateModelManager.notifyNewStateReached(lastState, deriveActions(lastState));
 
 		} catch(Exception e) {
 			logger.log(Level.ERROR, e.getMessage());
 			return "Error occurred: " + e.getMessage();
 		} finally {
-			browser.close();
+			stateModelManager.notifyTestSequenceStopped();
+			stateModelManager.notifyTestingEnded();
+			system.getBrowser().close();
 		}
 
-		return "OK";
+		// return the verdict, also applied in the lastState
+		return verdict.toString();
 	}
 
-	private boolean triggerInitialActions(Page page, Map<String, String> triggerActionsMap) {
+	private boolean triggerInitialActions(PlaywrightSUT system, Map<String, String> triggerActionsMap) {
 		try {
 			// Iterate over the selector-value pairs
 			for (Map.Entry<String, String> entry : triggerActionsMap.entrySet()) {
@@ -121,20 +137,12 @@ public class TESTARtool {
 				String value = entry.getValue();
 
 				// Wait for each field to appear
-				page.waitForSelector(selector);
+				system.getPage().waitForSelector(selector);
 
 				// Then, click or fill if value exists
-				if(value.isEmpty()) page.click(selector);
-				else page.fill(selector, value);
+				if(value.isEmpty()) system.getPage().click(selector);
+				else system.getPage().fill(selector, value);
 			}
-
-			// Static wait
-			page.waitForTimeout(300);
-
-			// Wait for the page to finish loading 
-			page.waitForLoadState(LoadState.DOMCONTENTLOADED);
-			page.waitForLoadState(LoadState.NETWORKIDLE);
-			page.waitForLoadState(LoadState.LOAD);
 
 			return true;
 		} catch (Exception e) {
@@ -143,12 +151,26 @@ public class TESTARtool {
 		}
 	}
 
-	private String getVerdict(Page page) {
+	private PlaywrightState getState(PlaywrightSUT system) {
+		PlaywrightState state = new PlaywrightState(system);
+
+		// TODO: Make this widget fetch process hierarchical
+		List<ElementHandle> stateElements = state.getPage().querySelectorAll("*");
+		for(ElementHandle elementHandle : stateElements){
+			new PlaywrightWidget(state, state, elementHandle);
+		}
+
+		return state;
+	}
+
+	private Verdict getVerdict(PlaywrightState state) {
+		Page statePage = state.getPage();
+
 		// Define the regex pattern to search for "error" or "exception" (case-insensitive)
 		Pattern errorPattern = Pattern.compile(suspiciousPattern, Pattern.CASE_INSENSITIVE);
 
 		// Query all relevant elements that might contain error messages
-		List<ElementHandle> messageElements = page.querySelectorAll("div, span, p, h1, h2, h3");
+		List<ElementHandle> messageElements = statePage.querySelectorAll("div, span, p, h1, h2, h3");
 
 		// Iterate through the elements to check for error messages
 		for (ElementHandle element : messageElements) {
@@ -164,15 +186,15 @@ public class TESTARtool {
 			// Check if the text matches the error pattern
 			if (errorPattern.matcher(textContent).find()) {
 				// Return the found error message
-				return "Error found: " + textContent.trim();
+				new Verdict(Verdict.SEVERITY_FAIL, "Failure: " + textContent.trim());
 			}
 		}
 
 		// If no error messages were found, return "OK"
-		return "OK";
+		return Verdict.OK;
 	}
 
-	private List<TESTARAction> deriveActions(Page page) {
+	private Set<Action> deriveActions(PlaywrightState state) {
 		// Define selectors for clickable elements
 		String[] clickableSelectors = {
 				"a",                       // Links
@@ -196,82 +218,69 @@ public class TESTARtool {
 				"input[type='password']"   // Password input fields
 		};
 
-		// List all clickable elements considering all clickable selectors into a single CSS selector string
-		List<ElementHandle> clickableElements = page.querySelectorAll(String.join(", ", clickableSelectors));
-
-		// List all fillable elements considering all fillable selectors into a single CSS selector string
-		List<ElementHandle> fillableElements = page.querySelectorAll(String.join(", ", fillableSelectors));
-
 		// Compile the filter pattern into a regex
 		Pattern pattern = Pattern.compile(filterPattern);
 
-		// Create click actions for non filtered clickable elements
-		List<TESTARAction> clickActions = clickableElements.stream()
-				.filter(element -> {
-					String elementContent;
-					try {
-						// Get the content of the element
-						elementContent = element.textContent() + (element.getAttribute("href") != null ? element.getAttribute("href") : "");
-					} catch (Exception e) {
-						// If there's an issue fetching the text, treat it as non-matching
-						return true; // Keep it in the list if we can't retrieve its text
-					}
-					// Return true if the element does not match the filter pattern
-					return !pattern.matcher(elementContent).find();
-				})
-				// Create a TESTARActionClick for each non filtered clickable element
-				.map(element -> new TESTARActionClick(element))
-				.collect(Collectors.toList());
+		Set<Action> actions = new HashSet<>();
 
-		// Create fill actions for non filtered fillable elements
-		List<TESTARAction> fillActions = fillableElements.stream()
-				.filter(element -> {
-					String elementContent;
-					try {
-						// Get the content of the element
-						elementContent = element.textContent();
-					} catch (Exception e) {
-						return true; // Keep it in the list if we can't retrieve its text
-					}
-					return !pattern.matcher(elementContent).find();
-				})
-				// Create a TESTARActionFill for each non filtered fillable element
-				// The text to type is generated randomly
-				.map(element -> new TESTARActionFill(element, RandomStringUtils.randomAlphabetic(10)))
-				.collect(Collectors.toList());
+		for (Widget widget : state) {
+			ElementHandle element = ((PlaywrightWidget) widget).getElementHandle();
 
-		// Return the combined list of actions
-		return Stream.concat(clickActions.stream(), fillActions.stream())
-				.collect(Collectors.toList());
+			if (element == null || !element.isVisible()) continue;
+
+			// Create click actions for non-filtered clickable elements
+			for (String selector : clickableSelectors) {
+				// Evaluate the element in the context of its clickable selector
+				Object isClickable = element.evaluate(String.format("el => el.matches(\"%s\")", selector));
+				if (isClickable instanceof Boolean && (Boolean) isClickable) {
+					String elementContent = element.textContent() + (element.getAttribute("href") != null ? element.getAttribute("href") : "");
+					if (!pattern.matcher(elementContent).find()) {
+						actions.add(new PlaywrightClick((PlaywrightWidget) widget));
+					}
+				}
+			}
+
+			// Create fill actions for non-filtered fillable elements
+			for (String selector : fillableSelectors) {
+				// Evaluate the element in the context of its fillable selector
+				Object isFillable = element.evaluate(String.format("el => el.matches(\"%s\")", selector));
+				if (isFillable instanceof Boolean && (Boolean) isFillable) {
+					String elementContent = element.textContent();
+					if (elementContent != null && !pattern.matcher(elementContent).find()) {
+						actions.add(new PlaywrightFill((PlaywrightWidget) widget, RandomStringUtils.randomAlphabetic(10)));
+					}
+				}
+			}
+		}
+
+		// Return the derived actions
+		return actions;
 	}
 
 	//TODO: Derive a TESTARActionBack instead of navigate to the initial state
-	private List<TESTARAction> controlWebPage(Page page, List<TESTARAction> actions){
+	private Set<Action> controlWebPage(PlaywrightState state, Set<Action> actions){
+		Page statePage = state.getPage();
+
 		// If TESTAR was not able to derive any action,
 		// maybe because the DOM state does not contain interactive elements
 		// Or if TESTAR is not in the webSUT URL
-		if(actions.isEmpty() || !page.url().contains(webSUT)) {
+		if(actions.isEmpty() || !statePage.url().contains(webSUT)) {
 			// Navigate to the original webSUT URL
-			page.navigate(webSUT);
-			// Wait for the page to finish loading 
-			page.waitForTimeout(300);
-			page.waitForLoadState(LoadState.DOMCONTENTLOADED);
-			page.waitForLoadState(LoadState.NETWORKIDLE);
-			page.waitForLoadState(LoadState.LOAD);
+			statePage.navigate(webSUT);
 			// And derive again the available actions
-			actions = deriveActions(page);
+			actions = deriveActions(state);
 		}
 		return actions;
 	}
 
-	private TESTARAction selectRandomAction(List<TESTARAction> actions) {
-		// Select a random action from the available actions
-		return actions.get(new Random().nextInt(actions.size()));
+	private Action selectRandomAction(Set<Action> actions) {
+		List<Action> actionList = new ArrayList<>(actions);
+		return actionList.get(new Random().nextInt(actionList.size()));
 	}
 
-	private boolean executeAction(Page page, TESTARAction action) {
+	private boolean executeAction(PlaywrightSUT system, PlaywrightState state, Action action) {
 		try {
-			action.run(page);
+			action.run(system, state, 0.0);
 		} catch(Exception e) {
 			logger.log(Level.ERROR, e.getMessage());
 			return false;

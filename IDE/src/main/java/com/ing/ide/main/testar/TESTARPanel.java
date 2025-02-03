@@ -1,29 +1,20 @@
 package com.ing.ide.main.testar;
 
-import java.awt.BorderLayout;
-import java.awt.GridLayout;
+import com.ing.ide.main.mainui.AppMainFrame;
+import com.ing.ide.settings.IconSettings;
+
+import javax.swing.*;
+import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import javax.swing.JButton;
-import javax.swing.JDialog;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JSpinner;
-import javax.swing.JTextArea;
-import javax.swing.JTextField;
-import javax.swing.SwingWorker;
-
-import com.ing.ide.main.mainui.AppMainFrame;
-import com.ing.ide.settings.IconSettings;
-
-public class TESTARExecutionPanel {
+public class TESTARPanel {
 
 	private final AppMainFrame sMainFrame;
 
-	public TESTARExecutionPanel(AppMainFrame sMainFrame) {
+	public TESTARPanel(AppMainFrame sMainFrame) {
 		this.sMainFrame = sMainFrame;
 	}
 

@@ -25,20 +25,26 @@ import com.ing.ide.main.mainui.AppMainFrame;
 import com.ing.ide.main.utils.Utils;
 import com.ing.ide.settings.IconSettings;
 
-public class TESTARReportPanel {
+public class HtmlReportPanel {
 	private static final Logger logger = LogManager.getLogger();
 
 	private final AppMainFrame sMainFrame;
 	private String reportsPath;
 
-	public TESTARReportPanel(AppMainFrame sMainFrame) {
+	public HtmlReportPanel(AppMainFrame sMainFrame) {
 		this.sMainFrame = sMainFrame;
 
 		try {
-			reportsPath = Utils.getAppRoot() + File.separator + "TESTAR_results" + File.separator;
+			reportsPath = Utils.getAppRoot()
+					+ File.separator + "testar"
+					+ File.separator + "results"
+					+ File.separator;
 		} catch (IOException e) {
 			logger.log(Level.ERROR, e.getMessage());
-			reportsPath = System.getProperty("user.dir") + File.separator + "TESTAR_results" + File.separator;
+			reportsPath = System.getProperty("user.dir")
+					+ File.separator + "testar"
+					+ File.separator + "results"
+					+ File.separator;
 			logger.log(Level.ERROR, "TESTARReportPanel reading HTML reports from: " + reportsPath);
 		}
 	}

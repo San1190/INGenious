@@ -208,7 +208,25 @@
 			<version>${javafx.version}</version>
 			<classifier>${mac.version}</classifier>
 		</dependency>
+		<!-- TESTAR tool dependencies -->
+		<!-- https://jitpack.io/com/github/TESTARtool/TESTAR_dev/f219def/build.log -->
+		<dependency>
+			<groupId>com.github.TESTARtool.TESTAR_dev</groupId>
+			<artifactId>core</artifactId>
+			<version>f219def</version>
+		</dependency>
+		<dependency>
+			<groupId>com.github.TESTARtool.TESTAR_dev</groupId>
+			<artifactId>statemodel</artifactId>
+			<version>f219def</version>
+		</dependency>
 	</dependencies>
+	<repositories>
+		<repository>
+			<id>jitpack.io</id>
+			<url>https://jitpack.io</url>
+		</repository>
+	</repositories>
 	<build>
 		<resources>
 			<resource>

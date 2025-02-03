@@ -9,8 +9,9 @@ import com.ing.ide.main.mainui.components.testdesign.testdata.ImportTestData;
 import com.ing.ide.main.settings.INGeniousSettings;
 import com.ing.ide.main.settings.DriverSettings;
 import com.ing.ide.main.settings.TMSettings;
-import com.ing.ide.main.testar.TESTARExecutionPanel;
-import com.ing.ide.main.testar.reporting.TESTARReportPanel;
+import com.ing.ide.main.testar.TESTARPanel;
+import com.ing.ide.main.testar.reporting.HtmlReportPanel;
+import com.ing.ide.main.testar.statemodel.StateModelAnalysis;
 import com.ing.ide.main.googlerecordingjson.JsonParser;
 import com.ing.ide.main.playwrightrecording.PlaywrightRecordingParser;
 import com.ing.ide.main.ui.AboutUI;
@@ -62,9 +63,11 @@ public class AppActionListener implements ActionListener {
     
     private Timer autoSaveTimer;
     
-    private final TESTARExecutionPanel testarExecutionPanel;
+    private final TESTARPanel testarPanel;
 
-    private final TESTARReportPanel testarReportPanel;
+    private final HtmlReportPanel htmlReportPanel;
+
+    private final StateModelAnalysis stateModelAnalysis;
 
 
     public AppActionListener(AppMainFrame sMainFrame, AppToolBar appToolBar) throws IOException {
@@ -81,8 +84,9 @@ public class AppActionListener implements ActionListener {
         injectScript = new InjectScript();
         importTestData = new ImportTestData(sMainFrame);
         playwrightRecordingParser=new PlaywrightRecordingParser(sMainFrame);
-        testarExecutionPanel = new TESTARExecutionPanel(sMainFrame);
-        testarReportPanel = new TESTARReportPanel(sMainFrame);
+        testarPanel = new TESTARPanel(sMainFrame);
+        htmlReportPanel = new HtmlReportPanel(sMainFrame);
+        stateModelAnalysis = new StateModelAnalysis();
 
     }
 
@@ -236,11 +240,14 @@ public class AppActionListener implements ActionListener {
                  break; 
 
             case "TESTAR Execution":
-            	testarExecutionPanel.openEditor();
+            	testarPanel.openEditor();
             	break;
             case "TESTAR Reports":
-            	testarReportPanel.openEditor();
+            	htmlReportPanel.openEditor();
             	break;
+            case "State Model Analysis":
+                stateModelAnalysis.openServer();
+                break;
 
             default:
                 System.out.println(ae.getActionCommand());

@@ -7,30 +7,31 @@ import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.Calendar;
-import java.util.List;
+import java.util.*;
 
+import com.ing.ide.main.testar.playwright.system.PlaywrightState;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import com.ing.ide.main.testar.actions.TESTARAction;
 import com.ing.ide.main.utils.Utils;
+import org.testar.monkey.alayer.Action;
+import org.testar.monkey.alayer.Verdict;
 
-public class TESTARHtmlReport {
+public class HtmlReport {
 	private static final Logger logger = LogManager.getLogger();
 
 	private String htmlFile;
 	private ArrayList<String> content = new ArrayList<>();
 
-	public TESTARHtmlReport() {
+	public HtmlReport() {
 		String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(Calendar.getInstance().getTime());
 		String reportName = "TESTAR_report_" + timeStamp + ".html";
 		try {
 			// Create a folder to store TESTAR results
-			String outputFolder = Utils.getAppRoot() + File.separator + "TESTAR_results";
+			String outputFolder = Utils.getAppRoot()
+					+ File.separator + "testar"
+					+ File.separator + "results";
 			if(!new File(outputFolder).exists())
 				new File(outputFolder).mkdir();
 
@@ -40,7 +41,9 @@ public class TESTARHtmlReport {
 			logger.log(Level.ERROR, e.getMessage());
 
 			// Then use the user dir to create a folder to store TESTAR results
-			String outputFolder = System.getProperty("user.dir") + File.separator + "TESTAR_results";
+			String outputFolder = System.getProperty("user.dir")
+					+ File.separator + "testar"
+					+ File.separator + "results";
 			if(!new File(outputFolder).exists())
 				new File(outputFolder).mkdir();
 
@@ -62,12 +65,13 @@ public class TESTARHtmlReport {
 		writeToFile();
 	}
 
-	public void addState(byte[] screenshot, String url) {
+	public void addState(PlaywrightState state) {
 		content.add("<h3>State</h3>");
+		String url = state.getPage().url();
 		content.add("<p><a href='" + url + "'>" + url + "</a></p>");
 
 		// Convert byte[] screenshot into a Base64 encoded string
-		String base64Image = Base64.getEncoder().encodeToString(screenshot);
+		String base64Image = Base64.getEncoder().encodeToString(state.getPage().screenshot());
 		// Create an HTML image tag with the Base64-encoded image
 		String imgTag = "<p><img src='data:image/png;base64," + base64Image + "' alt='Page Screenshot' /></p>";
 		content.add(imgTag);
@@ -75,14 +79,14 @@ public class TESTARHtmlReport {
 		writeToFile();
 	}
 
-	public void addDerivedActions(List<TESTARAction> actions) {
+	public void addDerivedActions(Set<Action> actions) {
 		content.add("<h3>Derived actions</h3>");
 
 		// Include actions information into a collapsible element
 		content.add("<details>");
 		content.add("<summary>Show/Hide Actions List</summary>");
 
-		for (TESTARAction action : actions) {
+		for (Action action : actions) {
 			content.add("<p>" + action.toString() + "</p>");
 		}
 
@@ -91,9 +95,15 @@ public class TESTARHtmlReport {
 		writeToFile();
 	}
 
-	public void addSelectedAction(TESTARAction action) {
+	public void addSelectedAction(Action action) {
 		content.add("<h3>Selected action</h3>");
 		content.add("<p>" + action.toString() + "</p>");
+		writeToFile();
+	}
+
+	public void addFinalVerdict(Verdict verdict) {
+		content.add("<h3>Final Verdict</h3>");
+		content.add("<p>" + verdict.toString() + "</p>");
 		writeToFile();
 	}
 
