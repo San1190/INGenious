@@ -17,7 +17,13 @@ public class PlaywrightFill extends TaggableBase implements Action {
 		// TODO: Change by a configurable abstraction mechanism
 		this.set(Tags.AbstractID, "PlaywrightFill:" + widget.get(Tags.AbstractID));
 		this.set(Tags.ConcreteID, "PlaywrightFill:" + widget.get(Tags.ConcreteID));
+
 		this.set(Tags.Desc, toString());
+		this.set(Tags.OriginWidget, widget);
+	}
+
+	public String getTypedText() {
+		return typedText;
 	}
 
 	@Override

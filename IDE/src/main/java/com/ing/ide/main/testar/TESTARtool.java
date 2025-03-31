@@ -1,5 +1,15 @@
 package com.ing.ide.main.testar;
 
+import com.ing.datalib.component.Project;
+import com.ing.datalib.component.Scenario;
+import com.ing.datalib.component.TestCase;
+import com.ing.datalib.component.TestStep;
+import com.ing.datalib.or.ObjectRepository;
+import com.ing.datalib.or.common.ORObjectInf;
+import com.ing.datalib.or.common.ObjectGroup;
+import com.ing.datalib.or.web.WebOR;
+import com.ing.datalib.or.web.WebORObject;
+import com.ing.datalib.or.web.WebORPage;
 import com.ing.ide.main.testar.playwright.actions.PlaywrightClick;
 import com.ing.ide.main.testar.playwright.actions.PlaywrightFill;
 import com.ing.ide.main.testar.playwright.system.PlaywrightSUT;
@@ -15,10 +25,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.testar.CodingManager;
 import org.testar.StateManagementTags;
-import org.testar.monkey.alayer.Action;
-import org.testar.monkey.alayer.Tag;
-import org.testar.monkey.alayer.Verdict;
-import org.testar.monkey.alayer.Widget;
+import org.testar.monkey.alayer.*;
 import org.testar.statemodel.StateModelManager;
 import org.testar.statemodel.StateModelManagerFactory;
 
@@ -28,13 +35,15 @@ import java.util.regex.Pattern;
 public class TESTARtool {
 	private static final Logger logger = LogManager.getLogger();
 
+	private final Project project;
 	private final String webSUT;
 	private final int numberActions;
 	private final String filterPattern;
 	private final String suspiciousPattern;
 	private final Map<String, String> triggerActionsMap;
 
-	public TESTARtool(String webSUT, Map<String, String> triggerActionsMap, int numberActions, String filterPattern, String suspiciousPattern) {
+	public TESTARtool(Project project, String webSUT, Map<String, String> triggerActionsMap, int numberActions, String filterPattern, String suspiciousPattern) {
+		this.project = project;
 		this.webSUT = webSUT;
 		this.triggerActionsMap = triggerActionsMap;
 		this.numberActions = numberActions;
@@ -43,6 +52,23 @@ public class TESTARtool {
 	}
 
 	public String generateSequence() {
+		// Prepare INGenious object repository used to store steps information
+		ObjectRepository objectRepository = new ObjectRepository(project);
+		WebOR webOR = objectRepository.getWebOR();
+		webOR.setObjectRepository(objectRepository);
+		WebORPage webORPage = new WebORPage("Parabank", webOR);
+		webOR.setPages(Arrays.asList(webORPage));
+
+		// Prepare an INGenious TestCase
+		Scenario scenario = new Scenario(project, "Parabank");
+		TestCase testCase = scenario.addTestCase("Parabank".concat("_sequence_" + 1));
+		// Open Browser step
+		TestStep initialTestStep = testCase.addNewStep();
+		initialTestStep.setObject("Browser");
+		initialTestStep.setDescription("Open the testing URL");
+		initialTestStep.setAction("Open");
+		initialTestStep.setInput("@".concat(webSUT));
+
 		// TODO: Make a real configurable abstraction mechanism in Actions, Widget, State
 		// Abstraction settings
 		List<Tag<?>> tagList = Collections.singletonList(StateManagementTags.getTagFromSettingsString("WebWidgetId"));
@@ -101,6 +127,60 @@ public class TESTARtool {
 				// Save the selected action information into the state model
 				stateModelManager.notifyActionExecution(selectedAction);
 
+				// Add the TestStep into INGenious
+				PlaywrightWidget playwrightWidget = (PlaywrightWidget) selectedAction.get(Tags.OriginWidget);
+				ElementHandle elementHandle = playwrightWidget.getElementHandle();
+
+				TestStep testStep = testCase.addNewStep();
+
+				testStep.setReference(webORPage.getName());
+
+				// TODO: Refactor hehe
+				if(elementHandle.getAttribute("id") != null) {
+					String id = elementHandle.getAttribute("id");
+					ObjectGroup objectGroup = webORPage.addObjectGroup(id);
+					WebORObject webORObject = (WebORObject) objectGroup.addObject(id);
+					webORObject.setAttributeByName("css", "#" + id);
+					testStep.setObject(webORObject.getName());
+				}
+				else if(elementHandle.getAttribute("name") != null) {
+					String name = elementHandle.getAttribute("name");
+					ObjectGroup objectGroup = webORPage.addObjectGroup(name);
+					WebORObject webORObject = (WebORObject) objectGroup.addObject(name);
+					webORObject.setAttributeByName("css", "[name='" + name + "']");
+					testStep.setObject(webORObject.getName());
+				}
+				else if(elementHandle.getAttribute("href") != null) {
+					String href = elementHandle.getAttribute("href");
+					ObjectGroup objectGroup = webORPage.addObjectGroup(href);
+					WebORObject webORObject = (WebORObject) objectGroup.addObject(href);
+					webORObject.setAttributeByName("css", "a[href='" + href + "']");
+					testStep.setObject(webORObject.getName());
+				}
+				else if(elementHandle.textContent() != null) {
+					String textContent = elementHandle.textContent();
+					ObjectGroup objectGroup = webORPage.addObjectGroup(textContent);
+					WebORObject webORObject = (WebORObject) objectGroup.addObject(textContent);
+					webORObject.setAttributeByName("Label", textContent);
+					testStep.setObject(webORObject.getName());
+				}
+				else {
+					ObjectGroup objectGroup = webORPage.addObjectGroup("Unknown");
+					WebORObject webORObject = (WebORObject) objectGroup.addObject("Unknown");
+				}
+
+				testStep.setDescription(selectedAction.get(Tags.Desc, "NoDesc"));
+
+				if(selectedAction instanceof PlaywrightClick)
+					testStep.setAction("Click");
+				else if(selectedAction instanceof PlaywrightFill) {
+					testStep.setAction("Fill");
+					testStep.setInput("@" + ((PlaywrightFill)selectedAction).getTypedText());
+				}
+				else testStep.setAction("Unknown");
+
+				System.out.println("TestStep: " + testStep);
+
 				// Execute the selected action
 				executeAction(system, state, selectedAction);
 			}
@@ -124,6 +204,12 @@ public class TESTARtool {
 			stateModelManager.notifyTestingEnded();
 			system.getBrowser().close();
 		}
+
+		// At the end of the generated sequence, save the generated INGenious testCase
+		testCase.save();
+		scenario.save();
+		objectRepository.save();
+		project.save();
 
 		// return the verdict, also applied in the lastState
 		return verdict.toString();

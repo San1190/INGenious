@@ -114,7 +114,13 @@ public class TESTARPanel {
 				String filterPattern = filterTextField.getText();
 				String suspiciousPattern = suspiciousTextField.getText();
 
-				TESTARtool testar = new TESTARtool(url, triggerActionsMap, numberActions, filterPattern, suspiciousPattern);
+				TESTARtool testar = new TESTARtool(
+						sMainFrame.getProject(),
+						url,
+						triggerActionsMap,
+						numberActions,
+						filterPattern,
+						suspiciousPattern);
 
 				// Create a SwingWorker to execute the long-running task
 				SwingWorker<String, Void> worker = new SwingWorker<String, Void>() {
@@ -145,6 +151,7 @@ public class TESTARPanel {
 		closeButton.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				dialog.dispose(); // Close the dialog without any action
+				sMainFrame.checkAndLoadRecent();
 			}
 		});
 

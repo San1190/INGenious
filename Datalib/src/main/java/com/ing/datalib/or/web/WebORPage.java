@@ -119,8 +119,9 @@ public class WebORPage implements ORPageInf<WebORObject, WebOR> {
             group.addObject(groupName);
             root.setSaved(false);
             return group;
+        } else {
+            return getObjectGroupByName(groupName);
         }
-        return null;
     }
 
     @JsonIgnore

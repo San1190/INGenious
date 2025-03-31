@@ -15,7 +15,9 @@ public class PlaywrightClick extends TaggableBase implements Action {
 		// TODO: Change by a configurable abstraction mechanism
 		this.set(Tags.AbstractID, "PlaywrightClick:" + widget.get(Tags.AbstractID));
 		this.set(Tags.ConcreteID, "PlaywrightClick:" + widget.get(Tags.ConcreteID));
+
 		this.set(Tags.Desc, toString());
+		this.set(Tags.OriginWidget, widget);
 	}
 
 	@Override
