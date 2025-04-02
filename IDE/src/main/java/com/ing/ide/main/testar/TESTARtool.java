@@ -95,7 +95,7 @@ public class TESTARtool {
 
 		try {
 			// Trigger initial actions (e.g., login)
-			triggerInitialActions(system, triggerActionsMap);
+			triggerInitialActions(testCase, webORPage, system, triggerActionsMap);
 
 			for(int i = 0; i < numberActions; i++) {
 				// Get the State of the playwright page
@@ -127,59 +127,8 @@ public class TESTARtool {
 				// Save the selected action information into the state model
 				stateModelManager.notifyActionExecution(selectedAction);
 
-				// Add the TestStep into INGenious
-				PlaywrightWidget playwrightWidget = (PlaywrightWidget) selectedAction.get(Tags.OriginWidget);
-				ElementHandle elementHandle = playwrightWidget.getElementHandle();
-
-				TestStep testStep = testCase.addNewStep();
-
-				testStep.setReference(webORPage.getName());
-
-				// TODO: Refactor hehe
-				if(elementHandle.getAttribute("id") != null) {
-					String id = elementHandle.getAttribute("id");
-					ObjectGroup objectGroup = webORPage.addObjectGroup(id);
-					WebORObject webORObject = (WebORObject) objectGroup.addObject(id);
-					webORObject.setAttributeByName("css", "#" + id);
-					testStep.setObject(webORObject.getName());
-				}
-				else if(elementHandle.getAttribute("name") != null) {
-					String name = elementHandle.getAttribute("name");
-					ObjectGroup objectGroup = webORPage.addObjectGroup(name);
-					WebORObject webORObject = (WebORObject) objectGroup.addObject(name);
-					webORObject.setAttributeByName("css", "[name='" + name + "']");
-					testStep.setObject(webORObject.getName());
-				}
-				else if(elementHandle.getAttribute("href") != null) {
-					String href = elementHandle.getAttribute("href");
-					ObjectGroup objectGroup = webORPage.addObjectGroup(href);
-					WebORObject webORObject = (WebORObject) objectGroup.addObject(href);
-					webORObject.setAttributeByName("css", "a[href='" + href + "']");
-					testStep.setObject(webORObject.getName());
-				}
-				else if(elementHandle.textContent() != null) {
-					String textContent = elementHandle.textContent();
-					ObjectGroup objectGroup = webORPage.addObjectGroup(textContent);
-					WebORObject webORObject = (WebORObject) objectGroup.addObject(textContent);
-					webORObject.setAttributeByName("Label", textContent);
-					testStep.setObject(webORObject.getName());
-				}
-				else {
-					ObjectGroup objectGroup = webORPage.addObjectGroup("Unknown");
-					WebORObject webORObject = (WebORObject) objectGroup.addObject("Unknown");
-				}
-
-				testStep.setDescription(selectedAction.get(Tags.Desc, "NoDesc"));
-
-				if(selectedAction instanceof PlaywrightClick)
-					testStep.setAction("Click");
-				else if(selectedAction instanceof PlaywrightFill) {
-					testStep.setAction("Fill");
-					testStep.setInput("@" + ((PlaywrightFill)selectedAction).getTypedText());
-				}
-				else testStep.setAction("Unknown");
-
-				System.out.println("TestStep: " + testStep);
+				// Create an INGenious TestStep based on TESTAR selected action
+				addActionTestStep(testCase, webORPage, selectedAction);
 
 				// Execute the selected action
 				executeAction(system, state, selectedAction);
@@ -215,7 +164,7 @@ public class TESTARtool {
 		return verdict.toString();
 	}
 
-	private boolean triggerInitialActions(PlaywrightSUT system, Map<String, String> triggerActionsMap) {
+	private boolean triggerInitialActions(TestCase testCase, WebORPage webORPage, PlaywrightSUT system, Map<String, String> triggerActionsMap) {
 		try {
 			// Iterate over the selector-value pairs
 			for (Map.Entry<String, String> entry : triggerActionsMap.entrySet()) {
@@ -228,6 +177,26 @@ public class TESTARtool {
 				// Then, click or fill if value exists
 				if(value.isEmpty()) system.getPage().click(selector);
 				else system.getPage().fill(selector, value);
+
+				// Add the triggered action as INGenious TestStep
+				TestStep testStep = testCase.addNewStep();
+				testStep.setReference(webORPage.getName());
+				ObjectGroup objectGroup = webORPage.addObjectGroup(selector);
+				WebORObject webORObject = (WebORObject) objectGroup.addObject(selector);
+				webORObject.setAttributeByName("css", selector);
+				testStep.setObject(webORObject.getName());
+				testStep.setDescription(selector);
+
+				if(value.isEmpty()) {
+					testStep.setAction("Click");
+				}
+				else {
+					testStep.setAction("Fill");
+					testStep.setInput("@" + value);
+				}
+
+				System.out.println("TestStep: " + testStep);
+
 			}
 
 			return true;
@@ -372,6 +341,68 @@ public class TESTARtool {
 			return false;
 		}
 		return true;
+	}
+
+	/**
+	 * Add the TestStep into INGenious
+	 *
+	 * @param testCase
+	 * @param webORPage
+	 * @param action
+	 */
+	private void addActionTestStep(TestCase testCase, WebORPage webORPage, Action action) {
+		PlaywrightWidget playwrightWidget = (PlaywrightWidget) action.get(Tags.OriginWidget);
+		ElementHandle elementHandle = playwrightWidget.getElementHandle();
+
+		TestStep testStep = testCase.addNewStep();
+
+		testStep.setReference(webORPage.getName());
+
+		// TODO: Refactor hehe
+		if(elementHandle.getAttribute("id") != null) {
+			String id = elementHandle.getAttribute("id");
+			ObjectGroup objectGroup = webORPage.addObjectGroup(id);
+			WebORObject webORObject = (WebORObject) objectGroup.addObject(id);
+			webORObject.setAttributeByName("css", "#" + id);
+			testStep.setObject(webORObject.getName());
+		}
+		else if(elementHandle.getAttribute("name") != null) {
+			String name = elementHandle.getAttribute("name");
+			ObjectGroup objectGroup = webORPage.addObjectGroup(name);
+			WebORObject webORObject = (WebORObject) objectGroup.addObject(name);
+			webORObject.setAttributeByName("css", "[name='" + name + "']");
+			testStep.setObject(webORObject.getName());
+		}
+		else if(elementHandle.getAttribute("href") != null) {
+			String href = elementHandle.getAttribute("href");
+			ObjectGroup objectGroup = webORPage.addObjectGroup(href);
+			WebORObject webORObject = (WebORObject) objectGroup.addObject(href);
+			webORObject.setAttributeByName("css", "a[href='" + href + "']");
+			testStep.setObject(webORObject.getName());
+		}
+		else if(elementHandle.textContent() != null) {
+			String textContent = elementHandle.textContent();
+			ObjectGroup objectGroup = webORPage.addObjectGroup(textContent);
+			WebORObject webORObject = (WebORObject) objectGroup.addObject(textContent);
+			webORObject.setAttributeByName("Label", textContent);
+			testStep.setObject(webORObject.getName());
+		}
+		else {
+			ObjectGroup objectGroup = webORPage.addObjectGroup("Unknown");
+			WebORObject webORObject = (WebORObject) objectGroup.addObject("Unknown");
+		}
+
+		testStep.setDescription(action.get(Tags.Desc, "NoDesc"));
+
+		if(action instanceof PlaywrightClick)
+			testStep.setAction("Click");
+		else if(action instanceof PlaywrightFill) {
+			testStep.setAction("Fill");
+			testStep.setInput("@" + ((PlaywrightFill)action).getTypedText());
+		}
+		else testStep.setAction("Unknown");
+
+		System.out.println("TestStep: " + testStep);
 	}
 
 }
