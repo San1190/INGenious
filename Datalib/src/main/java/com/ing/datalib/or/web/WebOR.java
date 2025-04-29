@@ -135,7 +135,7 @@ public class WebOR implements ORRootInf<WebORPage> {
             setSaved(false);
             return page;
         }
-        return null;
+        return getPageByName(pageName);
     }
 
     @JsonIgnore

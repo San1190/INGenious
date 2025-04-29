@@ -5,7 +5,6 @@ import com.ing.datalib.component.Scenario;
 import com.ing.datalib.component.TestCase;
 import com.ing.datalib.component.TestStep;
 import com.ing.datalib.or.ObjectRepository;
-import com.ing.datalib.or.common.ORObjectInf;
 import com.ing.datalib.or.common.ObjectGroup;
 import com.ing.datalib.or.web.WebOR;
 import com.ing.datalib.or.web.WebORObject;
@@ -29,6 +28,7 @@ import org.testar.monkey.alayer.*;
 import org.testar.statemodel.StateModelManager;
 import org.testar.statemodel.StateModelManagerFactory;
 
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.regex.Pattern;
 
@@ -36,6 +36,8 @@ public class TESTARtool {
 	private static final Logger logger = LogManager.getLogger();
 
 	private final Project project;
+	private final ObjectRepository objectRepository;
+	private final WebOR webOR;
 	private final String webSUT;
 	private final int numberActions;
 	private final String filterPattern;
@@ -49,32 +51,27 @@ public class TESTARtool {
 		this.numberActions = numberActions;
 		this.filterPattern = filterPattern;
 		this.suspiciousPattern = suspiciousPattern;
+
+		// Prepare the INGenious object repository used to store steps information
+		objectRepository = new ObjectRepository(project);
+		webOR = objectRepository.getWebOR();
+		webOR.setObjectRepository(objectRepository);
+
+		initAbstractionIdentifiers();
 	}
 
-	public String generateSequence() {
-		// Prepare INGenious object repository used to store steps information
-		ObjectRepository objectRepository = new ObjectRepository(project);
-		WebOR webOR = objectRepository.getWebOR();
-		webOR.setObjectRepository(objectRepository);
-		WebORPage webORPage = new WebORPage("Parabank", webOR);
-		webOR.setPages(Arrays.asList(webORPage));
-
-		// Prepare an INGenious TestCase
-		Scenario scenario = new Scenario(project, "Parabank");
-		TestCase testCase = scenario.addTestCase("Parabank".concat("_sequence_" + 1));
-		// Open Browser step
-		TestStep initialTestStep = testCase.addNewStep();
-		initialTestStep.setObject("Browser");
-		initialTestStep.setDescription("Open the testing URL");
-		initialTestStep.setAction("Open");
-		initialTestStep.setInput("@".concat(webSUT));
-
+	private void initAbstractionIdentifiers(){
 		// TODO: Make a real configurable abstraction mechanism in Actions, Widget, State
-		// Abstraction settings
 		List<Tag<?>> tagList = Collections.singletonList(StateManagementTags.getTagFromSettingsString("WebWidgetId"));
 		Tag<?>[] abstractTags = tagList.toArray(new Tag<?>[0]);
 		CodingManager.setCustomTagsForConcreteId(abstractTags);
 		CodingManager.setCustomTagsForAbstractId(abstractTags);
+	}
+
+	public String generateSequence() {
+		// Prepare an INGenious TestCase
+		Scenario scenario = new Scenario(project, "TESTAR_Generated");
+		TestCase testCase = createTestCase(scenario);
 
 		// Initialize the State Model
 		StateModelManager stateModelManager = StateModelManagerFactory.getStateModelManager(
@@ -83,7 +80,7 @@ public class TESTARtool {
 				StateModelConfig.getDefaultConfig());
 		stateModelManager.notifyTestSequencedStarted();
 
-		// Initialize a TESTAR HTML report
+		// Initialize the TESTAR HTML report
 		HtmlReport htmlReport = new HtmlReport();
 
 		// Initialize the System Under Test
@@ -94,8 +91,8 @@ public class TESTARtool {
 		Verdict verdict = Verdict.OK;
 
 		try {
-			// Trigger initial actions (e.g., login)
-			triggerInitialActions(testCase, webORPage, system, triggerActionsMap);
+			// Trigger initial actions steps (e.g., open browser, login)
+			triggerInitialActionSteps(testCase, system, triggerActionsMap);
 
 			for(int i = 0; i < numberActions; i++) {
 				// Get the State of the playwright page
@@ -127,11 +124,8 @@ public class TESTARtool {
 				// Save the selected action information into the state model
 				stateModelManager.notifyActionExecution(selectedAction);
 
-				// Create an INGenious TestStep based on TESTAR selected action
-				addActionTestStep(testCase, webORPage, selectedAction);
-
 				// Execute the selected action
-				executeAction(system, state, selectedAction);
+				executeAction(testCase, system, state, selectedAction);
 			}
 
 			// Get the last state
@@ -164,12 +158,43 @@ public class TESTARtool {
 		return verdict.toString();
 	}
 
-	private boolean triggerInitialActions(TestCase testCase, WebORPage webORPage, PlaywrightSUT system, Map<String, String> triggerActionsMap) {
+	private TestCase createTestCase(Scenario scenario) {
+		String urlCaseName = escapeURL(webSUT);
+		String timestamp = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date());
+		return scenario.addTestCase(urlCaseName + "_sequence_" + timestamp);
+	}
+
+	private String escapeURL(String url) {
+		if (url == null || url.isEmpty()) return "";
+		String cleanUrl = url.replaceFirst("^(http[s]?://)", "");
+		cleanUrl = cleanUrl.replaceAll("[^a-zA-Z0-9]", "_");
+		cleanUrl = cleanUrl.replaceAll("_+", "_");
+		if (cleanUrl.endsWith("_")) {
+			cleanUrl = cleanUrl.substring(0, cleanUrl.length() - 1);
+		}
+		return cleanUrl;
+	}
+
+	private void triggerInitialActionSteps(TestCase testCase, PlaywrightSUT system, Map<String, String> triggerActionsMap) {
+		// Add the open Browser step
+		TestStep initialTestStep = testCase.addNewStep();
+		initialTestStep.setObject("Browser");
+		initialTestStep.setDescription("Open the testing URL");
+		initialTestStep.setAction("Open");
+		initialTestStep.setInput("@".concat(webSUT));
+
 		try {
+			// Add the state-page to the OR
+			String webPageTitle = system.getPage().title();
+			WebORPage webORPage = webOR.addPage(webPageTitle);
+
 			// Iterate over the selector-value pairs
 			for (Map.Entry<String, String> entry : triggerActionsMap.entrySet()) {
 				String selector = entry.getKey();
 				String value = entry.getValue();
+
+				// Skip null or empty selectors (keys)
+				if (selector == null || selector.trim().isEmpty()) continue;
 
 				// Wait for each field to appear
 				system.getPage().waitForSelector(selector);
@@ -185,24 +210,19 @@ public class TESTARtool {
 				WebORObject webORObject = (WebORObject) objectGroup.addObject(selector);
 				webORObject.setAttributeByName("css", selector);
 				testStep.setObject(webORObject.getName());
-				testStep.setDescription(selector);
 
 				if(value.isEmpty()) {
 					testStep.setAction("Click");
+					testStep.setDescription("Click the [<Object>]");
 				}
 				else {
 					testStep.setAction("Fill");
 					testStep.setInput("@" + value);
+					testStep.setDescription("Enter the value [<Data>] in the Field [<Object>]");
 				}
-
-				System.out.println("TestStep: " + testStep);
-
 			}
-
-			return true;
 		} catch (Exception e) {
 			logger.log(Level.ERROR, "Trigger Initial Actions failed: " + e.getMessage());
-			return false;
 		}
 	}
 
@@ -308,6 +328,17 @@ public class TESTARtool {
 			}
 		}
 
+		// If TESTAR was able to derive actions in this state
+		if(!actions.isEmpty()){
+			// Add the state-page to the OR
+			String webPageTitle = state.getPage().title();
+			WebORPage webORPage = webOR.addPage(webPageTitle);
+			// Add the data of action-elements into the OR
+			for(Action action : actions){
+				addActionObject(webORPage, action);
+			}
+		}
+
 		// Return the derived actions
 		return actions;
 	}
@@ -333,76 +364,142 @@ public class TESTARtool {
 		return actionList.get(new Random().nextInt(actionList.size()));
 	}
 
-	private boolean executeAction(PlaywrightSUT system, PlaywrightState state, Action action) {
+	private void executeAction(TestCase testCase, PlaywrightSUT system, PlaywrightState state, Action action) {
+		// Create an INGenious TestStep based on the TESTAR action to be executed
+		addActionTestStep(testCase, state, action);
+
 		try {
 			action.run(system, state, 0.0);
 		} catch(Exception e) {
 			logger.log(Level.ERROR, e.getMessage());
-			return false;
 		}
-		return true;
 	}
 
-	/**
-	 * Add the TestStep into INGenious
-	 *
-	 * @param testCase
-	 * @param webORPage
-	 * @param action
-	 */
-	private void addActionTestStep(TestCase testCase, WebORPage webORPage, Action action) {
+	/** Add the action-element info into INGenious */
+	private WebORObject addActionObject(WebORPage webORPage, Action action) {
 		PlaywrightWidget playwrightWidget = (PlaywrightWidget) action.get(Tags.OriginWidget);
 		ElementHandle elementHandle = playwrightWidget.getElementHandle();
 
+		String elementDescription = describeElement(elementHandle);
+		ObjectGroup objectGroup = webORPage.addObjectGroup(elementDescription);
+		WebORObject webORObject = (WebORObject) objectGroup.addObject(elementDescription);
+		applyCssLocator(webORObject, elementHandle);
+
+		return webORObject;
+	}
+
+	/** Sets the best CSS locator attribute on the OR object */
+	private void applyCssLocator(WebORObject obj, ElementHandle el) {
+		if (el.getAttribute("id") != null) {
+			obj.setAttributeByName("css", "#" + el.getAttribute("id"));
+		} else if (el.getAttribute("name") != null) {
+			obj.setAttributeByName("css", "[name='" + el.getAttribute("name") + "']");
+		} else if (el.getAttribute("href") != null) {
+			obj.setAttributeByName("css", "a[href='" + el.getAttribute("href") + "']");
+		} else if (el.getAttribute("value") != null) {
+			obj.setAttributeByName("css", "[value='" + el.getAttribute("value") + "']");
+		} else if (el.textContent() != null) {
+			obj.setAttributeByName("label", el.textContent().trim());
+		}
+	}
+
+	public String describeElement(ElementHandle element) {
+		// Get visual element descriptor
+		String name = getFirstNonEmpty(
+				element.innerText().trim(),
+				element.getAttribute("name"),
+				element.getAttribute("id"),
+				element.getAttribute("aria-label"),
+				element.getAttribute("placeholder"),
+				element.getAttribute("value")
+		);
+		String descriptor = name.replaceAll("\\s+", "");
+		if (descriptor.isEmpty()) descriptor = "unnamed";
+
+		// Get type of the element
+		String tag = element.evaluate("el => el.tagName.toLowerCase()").toString();
+		String type = element.getAttribute("type");
+		String label;
+		switch (tag) {
+			case "button":
+				label = "[button]";
+				break;
+			case "a":
+				label = "[link]";
+				break;
+			case "input":
+				if ("submit".equalsIgnoreCase(type) || "button".equalsIgnoreCase(type)) {
+					label = "[input-button]";
+				} else {
+					label = "[input]";
+				}
+				break;
+			case "select":
+				// Handle <select> elements
+				ElementHandle selectedOption = element.querySelector("option[selected]");
+				if (selectedOption == null) {
+					selectedOption = element.querySelector("option");
+				}
+				String selectedText = selectedOption != null ? selectedOption.innerText().trim() : "";
+				String selectDescriptor = getFirstNonEmpty(
+						element.getAttribute("name"),
+						element.getAttribute("id"),
+						selectedText
+				);
+				descriptor = selectDescriptor.replaceAll("\\s+", "");
+				if (descriptor.isEmpty()) descriptor = "unnamed";
+				label = "[select]";
+				break;
+			case "textarea":
+				label = "[textarea]";
+				break;
+			case "label":
+				label = "[label]";
+				break;
+			case "img":
+				label = "[image]";
+				break;
+			case "svg":
+				label = "[icon]";
+				break;
+			default:
+				label = "[" + tag + "]";
+				break;
+		}
+
+		return descriptor + label;
+	}
+
+	private String getFirstNonEmpty(String... values) {
+		for (String val : values) {
+			if (val != null && !val.trim().isEmpty()) {
+				return val.trim();
+			}
+		}
+		return "";
+	}
+
+	/** Add the TestStep into INGenious */
+	private void addActionTestStep(TestCase testCase, PlaywrightState state, Action action) {
+		// Add the state-page to the OR
+		String webPageTitle = state.getPage().title();
+		WebORPage webORPage = webOR.addPage(webPageTitle);
+		// Add the data of the selected action-element into the OR
+		WebORObject webORObject = addActionObject(webORPage, action);
+		// Create an INGenious action test step
 		TestStep testStep = testCase.addNewStep();
-
 		testStep.setReference(webORPage.getName());
-
-		// TODO: Refactor hehe
-		if(elementHandle.getAttribute("id") != null) {
-			String id = elementHandle.getAttribute("id");
-			ObjectGroup objectGroup = webORPage.addObjectGroup(id);
-			WebORObject webORObject = (WebORObject) objectGroup.addObject(id);
-			webORObject.setAttributeByName("css", "#" + id);
-			testStep.setObject(webORObject.getName());
-		}
-		else if(elementHandle.getAttribute("name") != null) {
-			String name = elementHandle.getAttribute("name");
-			ObjectGroup objectGroup = webORPage.addObjectGroup(name);
-			WebORObject webORObject = (WebORObject) objectGroup.addObject(name);
-			webORObject.setAttributeByName("css", "[name='" + name + "']");
-			testStep.setObject(webORObject.getName());
-		}
-		else if(elementHandle.getAttribute("href") != null) {
-			String href = elementHandle.getAttribute("href");
-			ObjectGroup objectGroup = webORPage.addObjectGroup(href);
-			WebORObject webORObject = (WebORObject) objectGroup.addObject(href);
-			webORObject.setAttributeByName("css", "a[href='" + href + "']");
-			testStep.setObject(webORObject.getName());
-		}
-		else if(elementHandle.textContent() != null) {
-			String textContent = elementHandle.textContent();
-			ObjectGroup objectGroup = webORPage.addObjectGroup(textContent);
-			WebORObject webORObject = (WebORObject) objectGroup.addObject(textContent);
-			webORObject.setAttributeByName("Label", textContent);
-			testStep.setObject(webORObject.getName());
-		}
-		else {
-			ObjectGroup objectGroup = webORPage.addObjectGroup("Unknown");
-			WebORObject webORObject = (WebORObject) objectGroup.addObject("Unknown");
-		}
-
-		testStep.setDescription(action.get(Tags.Desc, "NoDesc"));
-
-		if(action instanceof PlaywrightClick)
+		testStep.setObject(webORObject.getName());
+		if(action instanceof PlaywrightClick) {
 			testStep.setAction("Click");
+			testStep.setDescription("Click the [<Object>]");
+		}
 		else if(action instanceof PlaywrightFill) {
 			testStep.setAction("Fill");
 			testStep.setInput("@" + ((PlaywrightFill)action).getTypedText());
+			testStep.setDescription("Enter the value [<Data>] in the Field [<Object>]");
 		}
 		else testStep.setAction("Unknown");
-
-		System.out.println("TestStep: " + testStep);
 	}
 
 }
