@@ -466,6 +466,7 @@ public class TESTARtool {
 		ObjectGroup objectGroup = webORPage.addObjectGroup(elementDescription);
 		WebORObject webORObject = (WebORObject) objectGroup.addObject(elementDescription);
 		applyCssLocator(webORObject, elementHandle);
+		applyRoleLocator(webORObject, elementHandle);
 
 		return webORObject;
 	}
@@ -493,6 +494,57 @@ public class TESTARtool {
 		String value = el.getAttribute("value");
 		if (value != null && !value.isEmpty()) {
 			obj.setCss("[value='" + value + "']");
+		}
+	}
+
+	private boolean applyRoleLocator(WebORObject obj, ElementHandle el) {
+		try {
+			// Get the role attribute (explicit or implied)
+			String role = el.getAttribute("role");
+			if (role == null || role.isEmpty()) {
+				// Attempt to derive role from tag if not explicitly set
+				String tagName = el.evaluate("el => el.tagName.toLowerCase()").toString();
+				switch (tagName) {
+					case "button":
+						role = "button";
+						break;
+					case "a":
+						role = "link";
+						break;
+					case "input":
+						String type = el.getAttribute("type");
+						if ("checkbox".equalsIgnoreCase(type)) role = "checkbox";
+						else if ("radio".equalsIgnoreCase(type)) role = "radio";
+						else if ("button".equalsIgnoreCase(type)) role = "button";
+						else if ("submit".equalsIgnoreCase(type)) role = "button";
+						else role = "textbox";
+						break;
+					case "select":
+						role = "combobox";
+						break;
+					case "textarea":
+						role = "textbox";
+						break;
+					default:
+						// unsupported tag
+						return false;
+				}
+			}
+
+			// Try to get accessible name
+			String name = el.evaluate("el => el.ariaLabel || el.getAttribute('aria-label') || el.innerText || el.getAttribute('title') || el.value || ''").toString().trim();
+			if (name.isEmpty()) {
+				return false; // no accessible name, skip
+			}
+
+			// Save in the format: "ROLE;NAME"
+			String rolename = role.toUpperCase() + ";" + name;
+			obj.setAttributeByName("Role", rolename);
+			return true;
+
+		} catch (Exception e) {
+			// Log if needed
+			return false;
 		}
 	}
 
