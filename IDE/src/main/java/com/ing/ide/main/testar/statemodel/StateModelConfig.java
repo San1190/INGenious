@@ -25,7 +25,7 @@ public class StateModelConfig extends TaggableBase {
             directoryPath = Utils.getAppRoot() + File.separator;
             graphsPath = directoryPath + "testar" + File.separator + "graphs";
             orientDBPath = directoryPath + "orientdb-community-3.0.34/databases";
-            setupLocalOrientDB();
+            //setupLocalOrientDB();
         } catch (IOException e) {
             logger.log(Level.ERROR, e.getMessage());
         }
@@ -36,7 +36,7 @@ public class StateModelConfig extends TaggableBase {
     public static TaggableBase getDefaultConfig() {
         TaggableBase defaults = new TaggableBase();
 
-        defaults.set(StateModelTags.StateModelEnabled, true);
+        defaults.set(StateModelTags.StateModelEnabled, false);
         defaults.set(StateModelTags.DataStore, "OrientDB");
         defaults.set(StateModelTags.DataStoreType, "plocal");
         defaults.set(StateModelTags.DataStoreServer, "");
@@ -46,7 +46,7 @@ public class StateModelConfig extends TaggableBase {
         defaults.set(StateModelTags.DataStorePassword, "admin");
         defaults.set(StateModelTags.DataStoreMode, "instant");
         defaults.set(StateModelTags.ActionSelectionAlgorithm, "random");
-        defaults.set(StateModelTags.StateModelStoreWidgets, true);
+        defaults.set(StateModelTags.StateModelStoreWidgets, false);
         defaults.set(StateModelTags.ResetDataStore, false);
 
         return defaults;
