@@ -12,7 +12,7 @@ import com.ing.engine.support.methodInf.ObjectType;
 import com.ing.util.encryption.Encryption;
 import io.appium.java_client.remote.SupportsContextSwitching;
 import java.time.Duration;
-import java.util.concurrent.TimeUnit;
+import java.time.temporal.ChronoUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
@@ -203,7 +203,7 @@ public class Basic extends MobileGeneral {
 
     private void setPageTimeOut(int sec) {
         try {
-            mDriver.manage().timeouts().pageLoadTimeout(sec, TimeUnit.SECONDS);
+            mDriver.manage().timeouts().pageLoadTimeout(Duration.of(sec, ChronoUnit.SECONDS));
         } catch (Exception ex) {
             System.out.println("Couldn't set PageTimeOut to " + sec);
         }
