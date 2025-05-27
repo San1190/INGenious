@@ -11,13 +11,15 @@ import com.ing.datalib.or.web.WebORObject;
 import com.ing.datalib.or.web.WebORPage;
 import com.ing.ide.main.testar.playwright.actions.PlaywrightClick;
 import com.ing.ide.main.testar.playwright.actions.PlaywrightFill;
+import com.ing.ide.main.testar.playwright.actions.PlaywrightRefresh;
 import com.ing.ide.main.testar.playwright.system.PlaywrightSUT;
 import com.ing.ide.main.testar.playwright.system.PlaywrightState;
 import com.ing.ide.main.testar.playwright.system.PlaywrightWidget;
 import com.ing.ide.main.testar.reporting.HtmlReport;
 import com.ing.ide.main.testar.statemodel.StateModelConfig;
-import com.microsoft.playwright.ElementHandle;
-import com.microsoft.playwright.Page;
+import com.microsoft.playwright.*;
+import com.microsoft.playwright.options.LoadState;
+import com.microsoft.playwright.options.WaitForSelectorState;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
@@ -28,9 +30,12 @@ import org.testar.monkey.alayer.*;
 import org.testar.statemodel.StateModelManager;
 import org.testar.statemodel.StateModelManagerFactory;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 public class TESTARtool {
 	private static final Logger logger = LogManager.getLogger();
@@ -43,6 +48,29 @@ public class TESTARtool {
 	private final String filterPattern;
 	private final String suspiciousPattern;
 	private final Map<String, String> triggerActionsMap;
+
+	// Define selectors for clickable elements
+	private final String[] clickableSelectors = {
+			"a",                       // Links
+			"button",                  // Buttons
+			"input[type='button']",    // Input button
+			"input[type='submit']",    // Input submit button
+			"input[type='reset']",     // Input reset button
+			"input[type='checkbox']",  // Checkbox inputs
+			"input[type='radio']",     // Radio button inputs
+			"select",                  // Dropdowns
+			"[onclick]",               // Elements with onclick attributes (custom clickable elements)
+			"[role='button']"          // Elements with a role attribute as buttons (often used in modern UIs)
+	};
+
+	// Define selectors for fillable elements
+	private final String[] fillableSelectors = {
+			"input[type='text']",      // Text input fields
+			"textarea",                // Text areas
+			"input[class='input']",    // Input fields
+			"input[type='email']",     // Email input fields
+			"input[type='password']"   // Password input fields
+	};
 
 	public TESTARtool(Project project, String webSUT, Map<String, String> triggerActionsMap, int numberActions, String filterPattern, String suspiciousPattern) {
 		this.project = project;
@@ -118,7 +146,7 @@ public class TESTARtool {
 				stateModelManager.notifyNewStateReached(state, actions);
 
 				// Select one of available actions
-				Action selectedAction = selectRandomAction(actions);
+				Action selectedAction = selectRandomAction(state, actions);
 				// Write selected action information in the HTML report
 				htmlReport.addSelectedAction(selectedAction);
 				// Save the selected action information into the state model
@@ -196,12 +224,28 @@ public class TESTARtool {
 				// Skip null or empty selectors (keys)
 				if (selector == null || selector.trim().isEmpty()) continue;
 
+				/**
 				// Wait for each field to appear
 				system.getPage().waitForSelector(selector);
 
 				// Then, click or fill if value exists
 				if(value.isEmpty()) system.getPage().click(selector);
 				else system.getPage().fill(selector, value);
+				 **/
+
+				// Wait for element to be attached in the DOM
+				Locator locator = system.getPage().locator(selector);
+				locator.waitFor(new Locator.WaitForOptions().setState(WaitForSelectorState.ATTACHED));
+
+				// Check if the element is visible
+				boolean isVisible = locator.isVisible();
+
+				if (isVisible) {
+					locator.click();
+				} else {
+					// Force click even if it's hidden
+					locator.click(new Locator.ClickOptions().setForce(true));
+				}
 
 				// Add the triggered action as INGenious TestStep
 				TestStep testStep = testCase.addNewStep();
@@ -229,70 +273,54 @@ public class TESTARtool {
 	private PlaywrightState getState(PlaywrightSUT system) {
 		PlaywrightState state = new PlaywrightState(system);
 
-		// TODO: Make this widget fetch process hierarchical
-		List<ElementHandle> stateElements = state.getPage().querySelectorAll("*");
-		for(ElementHandle elementHandle : stateElements){
-			new PlaywrightWidget(state, state, elementHandle);
+		try {
+			// Wait for page to finish loading before querying elements
+			state.getPage().waitForLoadState(LoadState.LOAD);
+
+			// TODO: Make this widget fetch process hierarchical
+			//List<ElementHandle> stateElements = state.getPage().querySelectorAll("*");
+			String interactiveWidgetsSelector = String.join(", ", Stream.concat(
+					Arrays.stream(clickableSelectors),
+					Arrays.stream(fillableSelectors)
+			).toArray(String[]::new));
+			List<ElementHandle> stateElements = state.getPage().querySelectorAll(interactiveWidgetsSelector);
+
+			for (ElementHandle elementHandle : stateElements) {
+				new PlaywrightWidget(state, state, elementHandle);
+			}
+
+		} catch (PlaywrightException e) {
+			logger.log(Level.ERROR, "Failed to collect state due to navigation or page reload: " + e.getMessage());
 		}
 
 		return state;
 	}
 
 	private Verdict getVerdict(PlaywrightState state) {
-		Page statePage = state.getPage();
+		Page page = state.getPage();
 
-		// Define the regex pattern to search for "error" or "exception" (case-insensitive)
-		Pattern errorPattern = Pattern.compile(suspiciousPattern, Pattern.CASE_INSENSITIVE);
+		// Use evaluateHandle to run JS and filter DOM elements matching the pattern
+		JSHandle handle = page.evaluateHandle(
+				"patternStr => {" +
+						"  const regex = new RegExp(patternStr, 'i');" +
+						"  return Array.from(document.querySelectorAll('div, span, p, h1, h2, h3'))" +
+						"    .filter(el => regex.test(el.textContent))" +
+						"    .map(el => el.textContent);" +
+						"}",
+				suspiciousPattern
+		);
 
-		// Query all relevant elements that might contain error messages
-		List<ElementHandle> messageElements = statePage.querySelectorAll("div, span, p, h1, h2, h3");
+		// Get the matching text contents as Java list
+		List<String> matchingTexts = (List<String>) handle.jsonValue();
 
-		// Iterate through the elements to check for error messages
-		for (ElementHandle element : messageElements) {
-			String textContent;
-			try {
-				// Get the text content of the element
-				textContent = element.textContent();
-			} catch (Exception e) {
-				// If there's an issue fetching the innerText, skip this element
-				continue;
-			}
-
-			// Check if the text matches the error pattern
-			if (errorPattern.matcher(textContent).find()) {
-				// Return the found error message
-				new Verdict(Verdict.SEVERITY_FAIL, "Failure: " + textContent.trim());
-			}
+		if (matchingTexts != null && !matchingTexts.isEmpty()) {
+			return new Verdict(Verdict.SEVERITY_FAIL, "Failure: " + matchingTexts.get(0).trim());
 		}
 
-		// If no error messages were found, return "OK"
 		return Verdict.OK;
 	}
 
 	private Set<Action> deriveActions(PlaywrightState state) {
-		// Define selectors for clickable elements
-		String[] clickableSelectors = {
-				"a",                       // Links
-				"button",                  // Buttons
-				"input[type='button']",    // Input button
-				"input[type='submit']",    // Input submit button
-				"input[type='reset']",     // Input reset button
-				"input[type='checkbox']",  // Checkbox inputs
-				"input[type='radio']",     // Radio button inputs
-				"select",                  // Dropdowns
-				"[onclick]",               // Elements with onclick attributes (custom clickable elements)
-				"[role='button']"          // Elements with a role attribute as buttons (often used in modern UIs)
-		};
-
-		// Define selectors for fillable elements
-		String[] fillableSelectors = {
-				"input[type='text']",      // Text input fields
-				"textarea",                // Text areas
-				"input[class='input']",    // Input fields
-				"input[type='email']",     // Email input fields
-				"input[type='password']"   // Password input fields
-		};
-
 		// Compile the filter pattern into a regex
 		Pattern pattern = Pattern.compile(filterPattern);
 
@@ -303,28 +331,33 @@ public class TESTARtool {
 
 			if (element == null || !element.isVisible()) continue;
 
-			// Create click actions for non-filtered clickable elements
-			for (String selector : clickableSelectors) {
-				// Evaluate the element in the context of its clickable selector
-				Object isClickable = element.evaluate(String.format("el => el.matches(\"%s\")", selector));
-				if (isClickable instanceof Boolean && (Boolean) isClickable) {
-					String elementContent = element.textContent() + (element.getAttribute("href") != null ? element.getAttribute("href") : "");
-					if (!pattern.matcher(elementContent).find()) {
-						actions.add(new PlaywrightClick((PlaywrightWidget) widget));
-					}
-				}
+			Object result = element.evaluate(
+					"(el, selectors) => {" +
+							"  const [clickable, fillable] = selectors;" +
+							"  return {" +
+							"    isClickable: el.matches(clickable)," +
+							"    isFillable: el.matches(fillable)," +
+							"    text: el.textContent || ''," +
+							"    href: el.getAttribute('href') || ''" +
+							"  };" +
+							"}",
+					Arrays.asList(String.join(", ", clickableSelectors), String.join(", ", fillableSelectors))
+			);
+
+			Map<String, Object> map = (Map<String, Object>) result;
+
+			boolean isClickable = Boolean.TRUE.equals(map.get("isClickable"));
+			boolean isFillable = Boolean.TRUE.equals(map.get("isFillable"));
+			String text = (String) map.get("text");
+			String href = (String) map.get("href");
+
+
+			if (isClickable && !pattern.matcher(text + href).find() && !isExternalLink(href)) {
+				actions.add(new PlaywrightClick((PlaywrightWidget) widget));
 			}
 
-			// Create fill actions for non-filtered fillable elements
-			for (String selector : fillableSelectors) {
-				// Evaluate the element in the context of its fillable selector
-				Object isFillable = element.evaluate(String.format("el => el.matches(\"%s\")", selector));
-				if (isFillable instanceof Boolean && (Boolean) isFillable) {
-					String elementContent = element.textContent();
-					if (elementContent != null && !pattern.matcher(elementContent).find()) {
-						actions.add(new PlaywrightFill((PlaywrightWidget) widget, RandomStringUtils.randomAlphabetic(10)));
-					}
-				}
+			if (isFillable && !pattern.matcher(text).find()) {
+				actions.add(new PlaywrightFill((PlaywrightWidget) widget, RandomStringUtils.randomAlphabetic(10)));
 			}
 		}
 
@@ -335,12 +368,53 @@ public class TESTARtool {
 			WebORPage webORPage = webOR.addPage(webPageTitle);
 			// Add the data of action-elements into the OR
 			for(Action action : actions){
-				addActionObject(webORPage, action);
+				try {
+					addActionObject(webORPage, action);
+				} catch (Exception e) {
+					logger.log(Level.ERROR, "Failed add action objects to the OR" + e.getMessage());
+				}
 			}
 		}
 
 		// Return the derived actions
 		return actions;
+	}
+
+	private boolean isExternalLink(String href) {
+		if (href == null || href.isEmpty()) return false;
+
+		href = href.trim().toLowerCase();
+
+		// Consider these schemes always external
+		if (href.startsWith("mailto:") || href.startsWith("tel:") || href.startsWith("javascript:")) return true;
+
+		// Internal anchors or root-relative paths are internal
+		if (href.startsWith("/") || href.startsWith("#")) return false;
+
+		// Relative URLs without a scheme or domain are internal
+		if (!href.startsWith("http://") && !href.startsWith("https://")) return false;
+
+		// For full URLs, check domain
+		String testDomain = extractHostDomain(webSUT);
+		return !href.contains(testDomain);
+	}
+
+	private String extractHostDomain(String url) {
+		try {
+			URI uri = new URI(url);
+			String host = uri.getHost();
+
+			if (host != null && host.startsWith("www.")) {
+				host = host.substring(4);
+			}
+
+			return host;
+
+		} catch (URISyntaxException e) {
+			logger.log(Level.ERROR, "Exception extracting the host domain of: " + url);
+		}
+
+		return "";
 	}
 
 	//TODO: Derive a TESTARActionBack instead of navigate to the initial state
@@ -359,14 +433,22 @@ public class TESTARtool {
 		return actions;
 	}
 
-	private Action selectRandomAction(Set<Action> actions) {
-		List<Action> actionList = new ArrayList<>(actions);
-		return actionList.get(new Random().nextInt(actionList.size()));
+	private Action selectRandomAction(PlaywrightState state, Set<Action> actions) {
+		if(actions.isEmpty()){
+			return new PlaywrightRefresh(state);
+		} else {
+			List<Action> actionList = new ArrayList<>(actions);
+			return actionList.get(new Random().nextInt(actionList.size()));
+		}
 	}
 
 	private void executeAction(TestCase testCase, PlaywrightSUT system, PlaywrightState state, Action action) {
 		// Create an INGenious TestStep based on the TESTAR action to be executed
-		addActionTestStep(testCase, state, action);
+		try {
+			addActionTestStep(testCase, state, action);
+		} catch (Exception e) {
+			logger.log(Level.ERROR, "Failed add executed action object to the OR" + e.getMessage());
+		}
 
 		try {
 			action.run(system, state, 0.0);
@@ -390,16 +472,27 @@ public class TESTARtool {
 
 	/** Sets the best CSS locator attribute on the OR object */
 	private void applyCssLocator(WebORObject obj, ElementHandle el) {
-		if (el.getAttribute("id") != null) {
-			obj.setAttributeByName("css", "#" + el.getAttribute("id"));
-		} else if (el.getAttribute("name") != null) {
-			obj.setAttributeByName("css", "[name='" + el.getAttribute("name") + "']");
-		} else if (el.getAttribute("href") != null) {
-			obj.setAttributeByName("css", "a[href='" + el.getAttribute("href") + "']");
-		} else if (el.getAttribute("value") != null) {
-			obj.setAttributeByName("css", "[value='" + el.getAttribute("value") + "']");
-		} else if (el.textContent() != null) {
-			obj.setAttributeByName("label", el.textContent().trim());
+		String id = el.getAttribute("id");
+		if (id != null && !id.isEmpty()) {
+			obj.setCss("#" + id);
+			return;
+		}
+
+		String name = el.getAttribute("name");
+		if (name != null && !name.isEmpty()) {
+			obj.setCss("[name='" + name + "']");
+			return;
+		}
+
+		String href = el.getAttribute("href");
+		if (href != null && !href.isEmpty()) {
+			obj.setCss("a[href='" + href + "']");
+			return;
+		}
+
+		String value = el.getAttribute("value");
+		if (value != null && !value.isEmpty()) {
+			obj.setCss("[value='" + value + "']");
 		}
 	}
 
