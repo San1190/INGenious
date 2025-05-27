@@ -48,55 +48,27 @@ public class PlaywrightWidget implements Widget, Serializable {
     }
 
     private String getAttributes(ElementHandle element) {
-        String id = element.getAttribute("id");
-        String name = element.getAttribute("name");
-        String tagName = element.getProperty("tagName").jsonValue().toString().toLowerCase();
-        String textContent = element.textContent();
+        // Evaluate a JavaScript function inside the browser context
+        Object result = element.evaluate("el => { " +
+                "  return {" +
+                "    id: el.id || ''," +
+                "    name: el.name || ''," +
+                "    tagName: (el.tagName || '').toLowerCase()," +
+                "    textContent: el.textContent || ''" +
+                "  };" +
+                "}");
 
-        return (id != null && !id.isEmpty() ? id : "") +
-                (name != null && !name.isEmpty() ? "-" + name : "") +
+        Map<String, Object> attributes = (Map<String, Object>) result;
+
+        String id = (String) attributes.get("id");
+        String name = (String) attributes.get("name");
+        String tagName = (String) attributes.get("tagName");
+        String textContent = (String) attributes.get("textContent");
+
+        return (!id.isEmpty() ? id : "") +
+                (!name.isEmpty() ? "-" + name : "") +
                 (!tagName.isEmpty() ? "-" + tagName : "") +
-                (textContent != null && !textContent.isEmpty() ? "-" + textContent : "");
-    }
-
-    // TODO: Check the performance of this Dom Path feature
-    private String generateDomPath(ElementHandle element) {
-        StringBuilder path = new StringBuilder();
-        ElementHandle current = element;
-
-        while (current != null) {
-            String tagName = current.getProperty("tagName").jsonValue().toString().toLowerCase();
-            int index = getElementIndex(current);
-
-            // Add the current tag and its index to the path
-            path.insert(0, "/" + tagName + "[" + index + "]");
-
-            // Get the parent element using evaluate and check if it exists
-            current = current.evaluateHandle("el => el.parentElement").asElement();
-        }
-        return path.toString();
-    }
-
-    private int getElementIndex(ElementHandle element) {
-        ElementHandle parent = element.evaluateHandle("el => el.parentElement").asElement();
-        if (parent == null) {
-            return 1; // Root element, always index 1
-        }
-
-        int index = 1;
-        String tagName = element.getProperty("tagName").jsonValue().toString().toLowerCase();
-
-        // Get all siblings with the same tag name
-        List<ElementHandle> siblings = parent.querySelectorAll(tagName);
-
-        // Count the position of the element among its siblings
-        for (ElementHandle sibling : siblings) {
-            if (sibling.equals(element)) {
-                break;
-            }
-            index++;
-        }
-        return index;
+                (!textContent.isEmpty() ? "-" + textContent : "");
     }
 
     final public void moveTo(Widget p, int idx) {
