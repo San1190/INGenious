@@ -38,37 +38,50 @@ public class PlaywrightWidget implements Widget, Serializable {
         this.set(Tags.Shape, Rect.fromCoordinates(0, 0, statePage.viewportSize().width, statePage.viewportSize().height));
         this.set(Tags.Role, Roles.Widget);
 
-        // TODO: Change by a configurable abstraction mechanism
-        this.set(Tags.AbstractID, getAttributes(elementHandle));
-        this.set(Tags.ConcreteID, getAttributes(elementHandle));
+        loadAttributes(this.elementHandle);
     }
 
     public ElementHandle getElementHandle() {
         return elementHandle;
     }
 
-    private String getAttributes(ElementHandle element) {
-        // Evaluate a JavaScript function inside the browser context
+    private void loadAttributes(ElementHandle element) {
+        // Evaluate a JavaScript function inside the browser context to extract multiple attributes
         Object result = element.evaluate("el => { " +
                 "  return {" +
                 "    id: el.id || ''," +
                 "    name: el.name || ''," +
                 "    tagName: (el.tagName || '').toLowerCase()," +
-                "    textContent: el.textContent || ''" +
+                "    textContent: el.textContent || ''," +
+                "    value: el.value || ''," +
+                "    placeholder: el.getAttribute('placeholder') || ''," +
+                "    ariaLabel: el.getAttribute('aria-label') || ''," +
+                "    role: el.getAttribute('role') || ''," +
+                "    href: el.getAttribute('href') || ''," +
+                "    type: el.getAttribute('type') || ''," +
+                "    title: el.getAttribute('title') || ''," +
+                "    innerText: el.innerText || ''" +
                 "  };" +
                 "}");
 
         Map<String, Object> attributes = (Map<String, Object>) result;
 
-        String id = (String) attributes.get("id");
-        String name = (String) attributes.get("name");
-        String tagName = (String) attributes.get("tagName");
-        String textContent = (String) attributes.get("textContent");
+        this.set(PlaywrightTags.WebId, (String) attributes.get("id"));
+        this.set(PlaywrightTags.WebName, (String) attributes.get("name"));
+        this.set(PlaywrightTags.WebTagName, (String) attributes.get("tagName"));
+        this.set(PlaywrightTags.WebValue, (String) attributes.get("value"));
+        this.set(PlaywrightTags.WebTextContent, (String) attributes.get("textContent"));
+        this.set(PlaywrightTags.WebPlaceholder, (String) attributes.get("placeholder"));
+        this.set(PlaywrightTags.WebAriaLabel, (String) attributes.get("ariaLabel"));
+        this.set(PlaywrightTags.WebRole, (String) attributes.get("role"));
+        this.set(PlaywrightTags.WebHref, (String) attributes.get("href"));
+        this.set(PlaywrightTags.WebType, (String) attributes.get("type"));
+        this.set(PlaywrightTags.WebTitle, (String) attributes.get("title"));
+        this.set(PlaywrightTags.WebInnerText, (String) attributes.get("innerText"));
 
-        return (!id.isEmpty() ? id : "") +
-                (!name.isEmpty() ? "-" + name : "") +
-                (!tagName.isEmpty() ? "-" + tagName : "") +
-                (!textContent.isEmpty() ? "-" + textContent : "");
+        // TODO: Change by a configurable abstraction mechanism
+        this.set(Tags.AbstractID, attributes.get("id") + "_" + attributes.get("name"));
+        this.set(Tags.ConcreteID, attributes.get("id") + "_" + attributes.get("name") + "_" + attributes.get("textContent"));
     }
 
     final public void moveTo(Widget p, int idx) {

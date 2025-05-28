@@ -14,6 +14,7 @@ import com.ing.ide.main.testar.playwright.actions.PlaywrightFill;
 import com.ing.ide.main.testar.playwright.actions.PlaywrightRefresh;
 import com.ing.ide.main.testar.playwright.system.PlaywrightSUT;
 import com.ing.ide.main.testar.playwright.system.PlaywrightState;
+import com.ing.ide.main.testar.playwright.system.PlaywrightTags;
 import com.ing.ide.main.testar.playwright.system.PlaywrightWidget;
 import com.ing.ide.main.testar.reporting.HtmlReport;
 import com.ing.ide.main.testar.statemodel.StateModelConfig;
@@ -460,50 +461,49 @@ public class TESTARtool {
 	/** Add the action-element info into INGenious */
 	private WebORObject addActionObject(WebORPage webORPage, Action action) {
 		PlaywrightWidget playwrightWidget = (PlaywrightWidget) action.get(Tags.OriginWidget);
-		ElementHandle elementHandle = playwrightWidget.getElementHandle();
 
-		String elementDescription = describeElement(elementHandle);
+		String elementDescription = describeElement(playwrightWidget);
 		ObjectGroup objectGroup = webORPage.addObjectGroup(elementDescription);
 		WebORObject webORObject = (WebORObject) objectGroup.addObject(elementDescription);
-		applyCssLocator(webORObject, elementHandle);
-		applyRoleLocator(webORObject, elementHandle);
+		applyCssLocator(webORObject, playwrightWidget);
+		applyRoleLocator(webORObject, playwrightWidget);
 
 		return webORObject;
 	}
 
 	/** Sets the best CSS locator attribute on the OR object */
-	private void applyCssLocator(WebORObject obj, ElementHandle el) {
-		String id = el.getAttribute("id");
+	private void applyCssLocator(WebORObject obj, PlaywrightWidget widget) {
+		String id = widget.get(PlaywrightTags.WebId, "");
 		if (id != null && !id.isEmpty()) {
 			obj.setCss("#" + id);
 			return;
 		}
 
-		String name = el.getAttribute("name");
+		String name = widget.get(PlaywrightTags.WebName, "");
 		if (name != null && !name.isEmpty()) {
 			obj.setCss("[name='" + name + "']");
 			return;
 		}
 
-		String href = el.getAttribute("href");
+		String href = widget.get(PlaywrightTags.WebHref, "");
 		if (href != null && !href.isEmpty()) {
 			obj.setCss("a[href='" + href + "']");
 			return;
 		}
 
-		String value = el.getAttribute("value");
+		String value = widget.get(PlaywrightTags.WebValue, "");
 		if (value != null && !value.isEmpty()) {
 			obj.setCss("[value='" + value + "']");
 		}
 	}
 
-	private boolean applyRoleLocator(WebORObject obj, ElementHandle el) {
+	private boolean applyRoleLocator(WebORObject obj, PlaywrightWidget widget) {
 		try {
 			// Get the role attribute (explicit or implied)
-			String role = el.getAttribute("role");
+			String role = widget.get(PlaywrightTags.WebRole, "");
 			if (role == null || role.isEmpty()) {
 				// Attempt to derive role from tag if not explicitly set
-				String tagName = el.evaluate("el => el.tagName.toLowerCase()").toString();
+				String tagName = widget.get(PlaywrightTags.WebTagName, "");
 				switch (tagName) {
 					case "button":
 						role = "button";
@@ -512,7 +512,7 @@ public class TESTARtool {
 						role = "link";
 						break;
 					case "input":
-						String type = el.getAttribute("type");
+						String type = widget.get(PlaywrightTags.WebType, "");
 						if ("checkbox".equalsIgnoreCase(type)) role = "checkbox";
 						else if ("radio".equalsIgnoreCase(type)) role = "radio";
 						else if ("button".equalsIgnoreCase(type)) role = "button";
@@ -532,7 +532,18 @@ public class TESTARtool {
 			}
 
 			// Try to get accessible name
-			String name = el.evaluate("el => el.ariaLabel || el.getAttribute('aria-label') || el.innerText || el.getAttribute('title') || el.value || ''").toString().trim();
+			String ariaLabel = widget.get(PlaywrightTags.WebAriaLabel, "").trim();
+			String innerText = widget.get(PlaywrightTags.WebInnerText, "").trim();
+			String title = widget.get(PlaywrightTags.WebTitle, "").trim();
+			String value = widget.get(PlaywrightTags.WebValue, "").trim();
+
+			String name = !ariaLabel.isEmpty() ? ariaLabel :
+					!innerText.isEmpty() ? innerText :
+							!title.isEmpty() ? title :
+									value;
+
+			name = name.trim();
+
 			if (name.isEmpty()) {
 				return false; // no accessible name, skip
 			}
@@ -548,22 +559,22 @@ public class TESTARtool {
 		}
 	}
 
-	public String describeElement(ElementHandle element) {
+	public String describeElement(PlaywrightWidget widget) {
 		// Get visual element descriptor
 		String name = getFirstNonEmpty(
-				element.innerText().trim(),
-				element.getAttribute("name"),
-				element.getAttribute("id"),
-				element.getAttribute("aria-label"),
-				element.getAttribute("placeholder"),
-				element.getAttribute("value")
+				widget.get(PlaywrightTags.WebInnerText, "").trim(),
+				widget.get(PlaywrightTags.WebName, ""),
+				widget.get(PlaywrightTags.WebId, ""),
+				widget.get(PlaywrightTags.WebAriaLabel, ""),
+				widget.get(PlaywrightTags.WebPlaceholder, ""),
+				widget.get(PlaywrightTags.WebValue, "")
 		);
 		String descriptor = name.replaceAll("\\s+", "");
 		if (descriptor.isEmpty()) descriptor = "unnamed";
 
 		// Get type of the element
-		String tag = element.evaluate("el => el.tagName.toLowerCase()").toString();
-		String type = element.getAttribute("type");
+		String tag = widget.get(PlaywrightTags.WebTagName, "");
+		String type = widget.get(PlaywrightTags.WebType, "");
 		String label;
 		switch (tag) {
 			case "button":
@@ -581,14 +592,14 @@ public class TESTARtool {
 				break;
 			case "select":
 				// Handle <select> elements
-				ElementHandle selectedOption = element.querySelector("option[selected]");
+				ElementHandle selectedOption = widget.getElementHandle().querySelector("option[selected]");
 				if (selectedOption == null) {
-					selectedOption = element.querySelector("option");
+					selectedOption = widget.getElementHandle().querySelector("option");
 				}
 				String selectedText = selectedOption != null ? selectedOption.innerText().trim() : "";
 				String selectDescriptor = getFirstNonEmpty(
-						element.getAttribute("name"),
-						element.getAttribute("id"),
+						widget.get(PlaywrightTags.WebName, ""),
+						widget.get(PlaywrightTags.WebId, ""),
 						selectedText
 				);
 				descriptor = selectDescriptor.replaceAll("\\s+", "");
