@@ -33,7 +33,7 @@ public class TESTARPanel {
 		// Add label and text field for URL input
 		JLabel urlLabel = new JLabel("Enter URL:");
 		JTextField urlTextField = new JTextField(40);
-		urlTextField.setText("https://para.testar.org/");
+		urlTextField.setText("https://www.ing.com/web/show");
 		inputPanel.add(urlLabel);
 		inputPanel.add(urlTextField);
 
@@ -44,17 +44,17 @@ public class TESTARPanel {
 		inputPanel.add(valueLabel);
 
 		JTextField selectorTextField1 = new JTextField(40);
-		selectorTextField1.setText("input[name='username']");
+		selectorTextField1.setText("label[for='cl_basic_com'] a.button-link.medium.no-icon.no-margin-right.white.has-border");
 		JTextField valueTextField1 = new JTextField(40);
-		valueTextField1.setText("john");
+		valueTextField1.setText("");
 
 		JTextField selectorTextField2 = new JTextField(40);
-		selectorTextField2.setText("input[name='password']");
+		selectorTextField2.setText("");
 		JTextField valueTextField2 = new JTextField(40);
-		valueTextField2.setText("demo");
+		valueTextField2.setText("");
 
 		JTextField selectorTextField3 = new JTextField(40);
-		selectorTextField3.setText("input[type='submit'][value='Log In']");
+		selectorTextField3.setText("");
 		JTextField valueTextField3 = new JTextField(40);
 		valueTextField3.setText("");
 

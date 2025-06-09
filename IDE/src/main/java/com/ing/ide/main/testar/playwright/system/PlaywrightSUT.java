@@ -1,10 +1,21 @@
 package com.ing.ide.main.testar.playwright.system;
 
+import com.ing.ide.main.utils.Utils;
 import com.microsoft.playwright.*;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.testar.monkey.alayer.SUTBase;
 import org.testar.monkey.alayer.exceptions.SystemStopException;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+
 public class PlaywrightSUT extends SUTBase {
+
+    private static final Logger logger = LogManager.getLogger();
 
     private final Browser browser;
     private final BrowserContext browserContext;
@@ -12,9 +23,12 @@ public class PlaywrightSUT extends SUTBase {
 
     public PlaywrightSUT(String webSUT) {
         Playwright playwright = Playwright.create();
+
         this.browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(false));
         this.browserContext = browser.newContext();
-        this.page = browser.newPage();
+        loadLocatorScripts();
+
+        this.page = browserContext.newPage();
         this.page.setDefaultTimeout(2000); // 2 seconds of timeout
         page.navigate(webSUT); // Navigate to the webSUT URL
     }
@@ -25,6 +39,18 @@ public class PlaywrightSUT extends SUTBase {
 
     public Page getPage() {
         return page;
+    }
+
+    private void loadLocatorScripts(){
+        try {
+            String testarResourcesPath = Utils.getAppRoot() + File.separator + "testar" + File.separator;
+            String cssJavaScript = testarResourcesPath + "css-selector-generator.min.js";
+            String locatorsJavaScript = testarResourcesPath + "locatorUtils.js";
+            browserContext.addInitScript(Files.readString(Paths.get(cssJavaScript)));
+            browserContext.addInitScript(Files.readString(Paths.get(locatorsJavaScript)));
+        } catch (IOException ioe) {
+            logger.log(Level.ERROR, "PlaywrightSUT: Failed to load the locator JavaScript files");
+        }
     }
 
     @Override

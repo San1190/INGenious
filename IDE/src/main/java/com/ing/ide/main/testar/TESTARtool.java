@@ -51,7 +51,7 @@ public class TESTARtool {
 	private final Map<String, String> triggerActionsMap;
 
 	// Define selectors for clickable elements
-	private final String[] clickableSelectors = {
+	public final static String[] clickableSelectors = {
 			"a",                       // Links
 			"button",                  // Buttons
 			"input[type='button']",    // Input button
@@ -65,7 +65,7 @@ public class TESTARtool {
 	};
 
 	// Define selectors for fillable elements
-	private final String[] fillableSelectors = {
+	public final static String[] fillableSelectors = {
 			"input[type='text']",      // Text input fields
 			"textarea",                // Text areas
 			"input[class='input']",    // Input fields
@@ -208,7 +208,7 @@ public class TESTARtool {
 		// Add the open Browser step
 		TestStep initialTestStep = testCase.addNewStep();
 		initialTestStep.setObject("Browser");
-		initialTestStep.setDescription("Open the testing URL");
+		initialTestStep.setDescription("Open the Url [<Data>] in the Browser");
 		initialTestStep.setAction("Open");
 		initialTestStep.setInput("@".concat(webSUT));
 
@@ -332,26 +332,10 @@ public class TESTARtool {
 
 			if (element == null || !element.isVisible()) continue;
 
-			Object result = element.evaluate(
-					"(el, selectors) => {" +
-							"  const [clickable, fillable] = selectors;" +
-							"  return {" +
-							"    isClickable: el.matches(clickable)," +
-							"    isFillable: el.matches(fillable)," +
-							"    text: el.textContent || ''," +
-							"    href: el.getAttribute('href') || ''" +
-							"  };" +
-							"}",
-					Arrays.asList(String.join(", ", clickableSelectors), String.join(", ", fillableSelectors))
-			);
-
-			Map<String, Object> map = (Map<String, Object>) result;
-
-			boolean isClickable = Boolean.TRUE.equals(map.get("isClickable"));
-			boolean isFillable = Boolean.TRUE.equals(map.get("isFillable"));
-			String text = (String) map.get("text");
-			String href = (String) map.get("href");
-
+			boolean isClickable = ((PlaywrightWidget) widget).get(PlaywrightTags.WebIsClickable);
+			boolean isFillable = ((PlaywrightWidget) widget).get(PlaywrightTags.WebIsFillable);
+			String text = ((PlaywrightWidget) widget).get(PlaywrightTags.WebTextContent);
+			String href = ((PlaywrightWidget) widget).get(PlaywrightTags.WebHref);
 
 			if (isClickable && !pattern.matcher(text + href).find() && !isExternalLink(href)) {
 				actions.add(new PlaywrightClick((PlaywrightWidget) widget));
@@ -465,98 +449,18 @@ public class TESTARtool {
 		String elementDescription = describeElement(playwrightWidget);
 		ObjectGroup objectGroup = webORPage.addObjectGroup(elementDescription);
 		WebORObject webORObject = (WebORObject) objectGroup.addObject(elementDescription);
-		applyCssLocator(webORObject, playwrightWidget);
-		applyRoleLocator(webORObject, playwrightWidget);
+
+		webORObject.setAttributeByName("Role", playwrightWidget.get(PlaywrightTags.WebLocatorRole));
+		webORObject.setXpath(playwrightWidget.get(PlaywrightTags.WebLocatorXPath));
+		webORObject.setAttributeByName("Text", playwrightWidget.get(PlaywrightTags.WebLocatorText));
+		webORObject.setCss(playwrightWidget.get(PlaywrightTags.WebLocatorCSS));
+		webORObject.setAttributeByName("Placeholder", playwrightWidget.get(PlaywrightTags.WebLocatorPlaceholder));
+		webORObject.setAttributeByName("Label", playwrightWidget.get(PlaywrightTags.WebLocatorLabel));
+		webORObject.setAttributeByName("AltText", playwrightWidget.get(PlaywrightTags.WebLocatorAltText));
+		webORObject.setAttributeByName("Title", playwrightWidget.get(PlaywrightTags.WebLocatorTitle));
+		webORObject.setAttributeByName("TestId", playwrightWidget.get(PlaywrightTags.WebLocatorTestId));
 
 		return webORObject;
-	}
-
-	/** Sets the best CSS locator attribute on the OR object */
-	private void applyCssLocator(WebORObject obj, PlaywrightWidget widget) {
-		String id = widget.get(PlaywrightTags.WebId, "");
-		if (id != null && !id.isEmpty()) {
-			obj.setCss("#" + id);
-			return;
-		}
-
-		String name = widget.get(PlaywrightTags.WebName, "");
-		if (name != null && !name.isEmpty()) {
-			obj.setCss("[name='" + name + "']");
-			return;
-		}
-
-		String href = widget.get(PlaywrightTags.WebHref, "");
-		if (href != null && !href.isEmpty()) {
-			obj.setCss("a[href='" + href + "']");
-			return;
-		}
-
-		String value = widget.get(PlaywrightTags.WebValue, "");
-		if (value != null && !value.isEmpty()) {
-			obj.setCss("[value='" + value + "']");
-		}
-	}
-
-	private boolean applyRoleLocator(WebORObject obj, PlaywrightWidget widget) {
-		try {
-			// Get the role attribute (explicit or implied)
-			String role = widget.get(PlaywrightTags.WebRole, "");
-			if (role == null || role.isEmpty()) {
-				// Attempt to derive role from tag if not explicitly set
-				String tagName = widget.get(PlaywrightTags.WebTagName, "");
-				switch (tagName) {
-					case "button":
-						role = "button";
-						break;
-					case "a":
-						role = "link";
-						break;
-					case "input":
-						String type = widget.get(PlaywrightTags.WebType, "");
-						if ("checkbox".equalsIgnoreCase(type)) role = "checkbox";
-						else if ("radio".equalsIgnoreCase(type)) role = "radio";
-						else if ("button".equalsIgnoreCase(type)) role = "button";
-						else if ("submit".equalsIgnoreCase(type)) role = "button";
-						else role = "textbox";
-						break;
-					case "select":
-						role = "combobox";
-						break;
-					case "textarea":
-						role = "textbox";
-						break;
-					default:
-						// unsupported tag
-						return false;
-				}
-			}
-
-			// Try to get accessible name
-			String ariaLabel = widget.get(PlaywrightTags.WebAriaLabel, "").trim();
-			String innerText = widget.get(PlaywrightTags.WebInnerText, "").trim();
-			String title = widget.get(PlaywrightTags.WebTitle, "").trim();
-			String value = widget.get(PlaywrightTags.WebValue, "").trim();
-
-			String name = !ariaLabel.isEmpty() ? ariaLabel :
-					!innerText.isEmpty() ? innerText :
-							!title.isEmpty() ? title :
-									value;
-
-			name = name.trim();
-
-			if (name.isEmpty()) {
-				return false; // no accessible name, skip
-			}
-
-			// Save in the format: "ROLE;NAME"
-			String rolename = role.toUpperCase() + ";" + name;
-			obj.setAttributeByName("Role", rolename);
-			return true;
-
-		} catch (Exception e) {
-			// Log if needed
-			return false;
-		}
 	}
 
 	public String describeElement(PlaywrightWidget widget) {

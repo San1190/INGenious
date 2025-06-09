@@ -1,5 +1,6 @@
 package com.ing.ide.main.testar.playwright.system;
 
+import com.ing.ide.main.testar.TESTARtool;
 import com.microsoft.playwright.ElementHandle;
 import com.microsoft.playwright.Page;
 import org.testar.monkey.Drag;
@@ -7,10 +8,7 @@ import org.testar.monkey.Util;
 import org.testar.monkey.alayer.*;
 
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class PlaywrightWidget implements Widget, Serializable {
 
@@ -38,7 +36,8 @@ public class PlaywrightWidget implements Widget, Serializable {
         this.set(Tags.Shape, Rect.fromCoordinates(0, 0, statePage.viewportSize().width, statePage.viewportSize().height));
         this.set(Tags.Role, Roles.Widget);
 
-        loadAttributes(this.elementHandle);
+        loadAttributes(elementHandle);
+        loadLocators(elementHandle);
     }
 
     public ElementHandle getElementHandle() {
@@ -47,22 +46,31 @@ public class PlaywrightWidget implements Widget, Serializable {
 
     private void loadAttributes(ElementHandle element) {
         // Evaluate a JavaScript function inside the browser context to extract multiple attributes
-        Object result = element.evaluate("el => { " +
-                "  return {" +
-                "    id: el.id || ''," +
-                "    name: el.name || ''," +
-                "    tagName: (el.tagName || '').toLowerCase()," +
-                "    textContent: el.textContent || ''," +
-                "    value: el.value || ''," +
-                "    placeholder: el.getAttribute('placeholder') || ''," +
-                "    ariaLabel: el.getAttribute('aria-label') || ''," +
-                "    role: el.getAttribute('role') || ''," +
-                "    href: el.getAttribute('href') || ''," +
-                "    type: el.getAttribute('type') || ''," +
-                "    title: el.getAttribute('title') || ''," +
-                "    innerText: el.innerText || ''" +
-                "  };" +
-                "}");
+        Object result = element.evaluate(
+                "(el, selectors) => {" +
+                        "  const [clickable, fillable] = selectors;" +
+                        "  return {" +
+                        "    id: el.id || ''," +
+                        "    name: el.name || ''," +
+                        "    tagName: (el.tagName || '').toLowerCase()," +
+                        "    textContent: el.textContent || ''," +
+                        "    value: el.value || ''," +
+                        "    placeholder: el.getAttribute('placeholder') || ''," +
+                        "    ariaLabel: el.getAttribute('aria-label') || ''," +
+                        "    role: el.getAttribute('role') || ''," +
+                        "    href: el.getAttribute('href') || ''," +
+                        "    type: el.getAttribute('type') || ''," +
+                        "    title: el.getAttribute('title') || ''," +
+                        "    innerText: el.innerText || ''," +
+                        "    isClickable: el.matches(clickable)," +
+                        "    isFillable: el.matches(fillable)" +
+                        "  };" +
+                        "}",
+                Arrays.asList(
+                        String.join(", ", TESTARtool.clickableSelectors),
+                        String.join(", ", TESTARtool.fillableSelectors)
+                )
+        );
 
         Map<String, Object> attributes = (Map<String, Object>) result;
 
@@ -79,9 +87,31 @@ public class PlaywrightWidget implements Widget, Serializable {
         this.set(PlaywrightTags.WebTitle, (String) attributes.get("title"));
         this.set(PlaywrightTags.WebInnerText, (String) attributes.get("innerText"));
 
+        this.set(PlaywrightTags.WebIsClickable, (Boolean) attributes.get("isClickable"));
+        this.set(PlaywrightTags.WebIsFillable, (Boolean) attributes.get("isFillable"));
+
         // TODO: Change by a configurable abstraction mechanism
         this.set(Tags.AbstractID, attributes.get("id") + "_" + attributes.get("name"));
         this.set(Tags.ConcreteID, attributes.get("id") + "_" + attributes.get("name") + "_" + attributes.get("textContent"));
+    }
+
+    private void loadLocators(ElementHandle element) {
+        Object result = element.evaluate("el => window.__locatorUtils.extractLocators(el)");
+
+        Map<String, Object> selectors = (Map<String, Object>) result;
+
+        this.set(PlaywrightTags.WebLocatorRole, (String) selectors.get("role"));
+        this.set(PlaywrightTags.WebLocatorXPath, (String) selectors.get("xpath"));
+        this.set(PlaywrightTags.WebLocatorText, (String) selectors.get("text"));
+        this.set(PlaywrightTags.WebLocatorCSS, (String) selectors.get("css"));
+        this.set(PlaywrightTags.WebLocatorPlaceholder, (String) selectors.get("placeholder"));
+        this.set(PlaywrightTags.WebLocatorLabel, (String) selectors.get("label"));
+        this.set(PlaywrightTags.WebLocatorAltText, (String) selectors.get("altText"));
+        this.set(PlaywrightTags.WebLocatorTitle, (String) selectors.get("title"));
+        this.set(PlaywrightTags.WebLocatorTestId, (String) selectors.get("testId"));
+
+        // TODO: Prepare a logic to Compose a chained selector
+        this.set(PlaywrightTags.WebChainedLocator, "");
     }
 
     final public void moveTo(Widget p, int idx) {

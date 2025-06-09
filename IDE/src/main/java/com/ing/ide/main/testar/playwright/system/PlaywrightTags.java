@@ -37,6 +37,34 @@ public class PlaywrightTags extends TagsBase {
 
     public static final Tag<String> WebInnerText = from("WebInnerText", String.class);
 
+    /** Locator Tags **/
+
+    public static final Tag<String> WebLocatorRole = from("WebLocatorRole", String.class);
+
+    public static final Tag<String> WebLocatorXPath = from("WebLocatorXPath", String.class);
+
+    public static final Tag<String> WebLocatorText = from("WebLocatorText", String.class);
+
+    public static final Tag<String> WebLocatorCSS = from("WebLocatorCSS", String.class);
+
+    public static final Tag<String> WebLocatorPlaceholder = from("WebLocatorPlaceholder", String.class);
+
+    public static final Tag<String> WebLocatorLabel = from("WebLocatorLabel", String.class);
+
+    public static final Tag<String> WebLocatorAltText = from("WebLocatorAltText", String.class);
+
+    public static final Tag<String> WebLocatorTitle = from("WebLocatorTitle", String.class);
+
+    public static final Tag<String> WebLocatorTestId = from("WebLocatorTestId", String.class);
+
+    public static final Tag<String> WebChainedLocator = from("WebChainedLocator", String.class);
+
+    /** Action Tags **/
+
+    public static final Tag<Boolean> WebIsClickable = from("WebIsClickable", Boolean.class);
+
+    public static final Tag<Boolean> WebIsFillable = from("WebIsFillable", Boolean.class);
+
     public static Set<Tag<?>> getAllTags() {
         return tagSet;
     }
