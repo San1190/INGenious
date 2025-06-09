@@ -12,7 +12,7 @@ import com.ing.engine.support.methodInf.ObjectType;
 import com.ing.util.encryption.Encryption;
 import io.appium.java_client.remote.SupportsContextSwitching;
 import java.time.Duration;
-import java.time.temporal.ChronoUnit;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
@@ -53,39 +53,6 @@ public class Basic extends MobileGeneral {
         if (Element != null) {
             if (Element.isDisplayed()) {
                 Tap();
-            } else {
-                Report.updateTestLog(Action, "Element [" + ObjectName + "] not Visible", Status.DONE);
-            }
-        } else {
-            Report.updateTestLog(Action, "Element [" + ObjectName + "] not Exists", Status.DONE);
-        }
-    }
-
-    @Action(object = ObjectType.APP, desc = "Double click [<Object>] element")
-    public void doubleTapElement() {
-        if (elementEnabled()) {
-            new Actions(mDriver).doubleClick(Element).build().perform();
-            Report.updateTestLog("doubleClickElement", "'" + Element
-                    + "' is doubleClicked", Status.DONE);
-        } else {
-            throw new ElementException(ExceptionType.Element_Not_Enabled, ObjectName);
-        }
-    }
-
-    @Action(object = ObjectType.APP, desc = "Tap the [<Object>] if it exists")
-    public void doubleTapIfExists() {
-        if (Element != null) {
-            doubleTapElement();
-        } else {
-            Report.updateTestLog(Action, "Element [" + ObjectName + "] not Exists", Status.DONE);
-        }
-    }
-
-    @Action(object = ObjectType.APP, desc = "Tap the [<Object>] if it is displayed")
-    public void doubleTapIfVisible() {
-        if (Element != null) {
-            if (Element.isDisplayed()) {
-                doubleTapElement();
             } else {
                 Report.updateTestLog(Action, "Element [" + ObjectName + "] not Visible", Status.DONE);
             }
@@ -203,7 +170,7 @@ public class Basic extends MobileGeneral {
 
     private void setPageTimeOut(int sec) {
         try {
-            mDriver.manage().timeouts().pageLoadTimeout(Duration.of(sec, ChronoUnit.SECONDS));
+            mDriver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(sec));
         } catch (Exception ex) {
             System.out.println("Couldn't set PageTimeOut to " + sec);
         }
@@ -245,6 +212,7 @@ public class Basic extends MobileGeneral {
         }
 
     }
+    /*
 
     @Action(object = ObjectType.BROWSER, desc = "Open the Url [<Data>] in the Browser", input = InputType.YES)
     public void Open() {
@@ -325,5 +293,5 @@ public class Basic extends MobileGeneral {
                     Status.PASS);
         }
     }
-
+     */
 }
