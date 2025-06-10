@@ -315,7 +315,7 @@ public class TESTARtool {
 		List<String> matchingTexts = (List<String>) handle.jsonValue();
 
 		if (matchingTexts != null && !matchingTexts.isEmpty()) {
-			return new Verdict(Verdict.SEVERITY_FAIL, "Failure: " + matchingTexts.get(0).trim());
+			return new Verdict(Verdict.Severity.FAIL, "Failure: " + matchingTexts.get(0).trim());
 		}
 
 		return Verdict.OK;

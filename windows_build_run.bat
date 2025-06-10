@@ -1,7 +1,7 @@
 @echo off
 
 :: Create clean distribution
-call mvn clean install --file pom.xml
+call mvn clean install -U --file pom.xml
 
 :: Define output directory
 set outputDir=Dist\target

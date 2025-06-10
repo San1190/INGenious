@@ -255,6 +255,18 @@
             <artifactId>com.ibm.mq.allclient</artifactId>
             <version>${ibmmq.version}</version>
         </dependency>
+		<!-- TESTAR tool dependencies -->
+		<!-- https://jitpack.io/com/github/TESTARtool/TESTAR_dev/v2.7.1/build.log -->
+		<dependency>
+			<groupId>com.github.TESTARtool.TESTAR_dev</groupId>
+			<artifactId>core</artifactId>
+			<version>v2.7.1</version>
+		</dependency>
+		<dependency>
+			<groupId>com.github.TESTARtool.TESTAR_dev</groupId>
+			<artifactId>statemodel</artifactId>
+			<version>v2.7.1</version>
+		</dependency>
     </dependencies>
 
     <repositories>
@@ -263,6 +275,10 @@
             <url>https://packages.confluent.io/maven/</url>
         </repository>
     -->
+		<repository>
+			<id>jitpack.io</id>
+			<url>https://jitpack.io</url>
+		</repository>
     </repositories>
 
     <build>
