@@ -33,13 +33,20 @@
 
         if (!role) return ''; // skip unsupported
 
-        const name =
-          el.getAttribute('aria-label') ||
-          el.ariaLabel ||
-          el.getAttribute('title') ||
-          el.innerText?.trim() ||
-          el.value ||
-          '';
+        let name = '';
+
+        name = el.getAttribute('aria-label') || el.ariaLabel || el.getAttribute('title');
+
+        if (!name && ['input', 'textarea', 'select'].includes(tagName)) {
+            name = el.getAttribute('placeholder') || '';
+        }
+
+        if (!name && el.innerText) {
+            const trimmedText = el.innerText.trim();
+            if (trimmedText !== '') {
+                name = trimmedText;
+            }
+        }
 
         if (!name || name.trim() === '') return '';
 
