@@ -9,6 +9,7 @@ import com.ing.ide.main.mainui.components.testdesign.testdata.ImportTestData;
 import com.ing.ide.main.settings.INGeniousSettings;
 import com.ing.ide.main.settings.DriverSettings;
 import com.ing.ide.main.settings.TMSettings;
+import com.ing.ide.main.testar.MCPAgentPanel;
 import com.ing.ide.main.testar.TESTARPanel;
 import com.ing.ide.main.testar.reporting.HtmlReportPanel;
 import com.ing.ide.main.testar.statemodel.StateModelAnalysis;
@@ -69,6 +70,7 @@ public class AppActionListener implements ActionListener {
 
     private final StateModelAnalysis stateModelAnalysis;
 
+    private final MCPAgentPanel mcpAgentPanel;
 
     public AppActionListener(AppMainFrame sMainFrame, AppToolBar appToolBar) throws IOException {
         this.sMainFrame = sMainFrame;
@@ -87,6 +89,7 @@ public class AppActionListener implements ActionListener {
         testarPanel = new TESTARPanel(sMainFrame);
         htmlReportPanel = new HtmlReportPanel(sMainFrame);
         stateModelAnalysis = new StateModelAnalysis();
+        mcpAgentPanel = new MCPAgentPanel(sMainFrame);
 
     }
 
@@ -247,6 +250,9 @@ public class AppActionListener implements ActionListener {
             	break;
             case "State Model Analysis":
                 stateModelAnalysis.openServer();
+                break;
+            case "MCP Agent":
+                mcpAgentPanel.openEditor();
                 break;
 
             default:

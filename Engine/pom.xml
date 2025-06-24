@@ -267,6 +267,11 @@
 			<artifactId>statemodel</artifactId>
 			<version>v2.7.1</version>
 		</dependency>
+		<dependency>
+			<groupId>com.github.TESTARtool.TESTAR_dev</groupId>
+			<artifactId>testar</artifactId>
+			<version>v2.7.1</version>
+		</dependency>
     </dependencies>
 
     <repositories>
