@@ -2,6 +2,7 @@ package com.ing.ide.main.testar.playwright.system;
 
 import com.ing.ide.main.utils.Utils;
 import com.microsoft.playwright.*;
+import com.microsoft.playwright.options.LoadState;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -29,8 +30,9 @@ public class PlaywrightSUT extends SUTBase {
         loadLocatorScripts();
 
         this.page = browserContext.newPage();
-        this.page.setDefaultTimeout(2000); // 2 seconds of timeout
         page.navigate(webSUT); // Navigate to the webSUT URL
+        this.page.waitForLoadState(LoadState.LOAD, new Page.WaitForLoadStateOptions().setTimeout(20000));
+        this.page.setDefaultTimeout(2000); // 2 seconds of timeout
     }
 
     public Browser getBrowser() {

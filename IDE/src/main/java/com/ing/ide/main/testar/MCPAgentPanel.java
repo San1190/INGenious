@@ -1,18 +1,24 @@
 package com.ing.ide.main.testar;
 
 import com.ing.ide.main.mainui.AppMainFrame;
+import com.ing.ide.main.testar.mcp.MCPAgent;
 import com.ing.ide.settings.IconSettings;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 public class MCPAgentPanel {
 
 	private final AppMainFrame sMainFrame;
+
+	private String defaultBDDText =
+			"Given the user navigates to the url 'https://para.testar.org/'\n" +
+			"When the user navigates to the contact page\n" +
+			"And the user fills the customer care form with valid data\n" +
+			"And the user submits the customer care form\n" +
+			"Then a message indicating the a representative will be contacting you appears";
 
 	public MCPAgentPanel(AppMainFrame sMainFrame) {
 		this.sMainFrame = sMainFrame;
@@ -39,7 +45,7 @@ public class MCPAgentPanel {
 
 		JLabel actionsLabel = new JLabel("Max Actions:");
 		JSpinner actionsSpinner = new JSpinner();
-		actionsSpinner.setValue(10);
+		actionsSpinner.setValue(20);
 		formPanel.add(actionsLabel);
 		formPanel.add(actionsSpinner);
 
@@ -47,12 +53,6 @@ public class MCPAgentPanel {
 
 		// Add a BDD Instructions text area with scroll
 		JLabel bddLabel = new JLabel("BDD Instructions:");
-		String defaultBDDText =
-				"Given the user navigates to the url 'https://para.testar.org/'\n" +
-				"When the user fill 'john' on the username text field\n" +
-				"When the user fill 'demo' on the password text field\n" +
-				"When the user clicks on the 'Login' button\n" +
-				"Then the link 'Request Loan' should be displayed";
 
 		JTextArea bddTextArea = new JTextArea(defaultBDDText, 10, 40);
 		bddTextArea.setLineWrap(true);
@@ -77,6 +77,9 @@ public class MCPAgentPanel {
 				int maxActions = (Integer) actionsSpinner.getValue();
 				String bddInstructions = bddTextArea.getText();
 
+				// Save possible updated BDD text
+				defaultBDDText = bddInstructions;
+
 				MCPAgent mcpAgent = new MCPAgent(
 						sMainFrame.getProject(),
 						url,
@@ -95,6 +98,9 @@ public class MCPAgentPanel {
 
 		closeButton.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
+				// Save possible updated BDD text
+				defaultBDDText = bddTextArea.getText();
+
 				dialog.dispose();
 				sMainFrame.checkAndLoadRecent();
 			}

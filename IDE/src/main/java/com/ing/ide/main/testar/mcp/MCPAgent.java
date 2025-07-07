@@ -1,10 +1,9 @@
-package com.ing.ide.main.testar;
+package com.ing.ide.main.testar.mcp;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ing.datalib.component.Project;
 import com.ing.datalib.or.ObjectRepository;
 import com.ing.datalib.or.web.WebOR;
-import com.ing.ide.main.testar.mcp.MCPInterface;
 import okhttp3.*;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
@@ -52,7 +51,10 @@ public class MCPAgent {
 		}
 
 		List<Map<String, Object>> messages = new ArrayList<>();
-		messages.add(Map.of("role", "system", "content", "You are a BDD-GUI test agent. Your goal is to complete the BDD instructions. Use loadWebURL, getState, executeClickAction, and executeFillAction functions."));
+		messages.add(Map.of("role", "system", "content", "You are a BDD-GUI test agent. " +
+				"Your goal is to complete the BDD instructions. " +
+				"Use loadWebURL, getState, executeClickAction, and executeFillAction functions. " +
+				"When considering the BDD test is completed use the getStateImage and stopTest functions."));
 		messages.add(Map.of("role", "user", "content", "Begin by load the web url to be tested."));
 		messages.add(Map.of("role", "user", "content", "Get the current GUI state to obtain the available web elements."));
 		messages.add(Map.of("role", "user", "content", this.bddInstructions));
@@ -88,8 +90,10 @@ public class MCPAgent {
 				Map<?, ?> functionCall = (Map<?, ?>) message.get("function_call");
 
 				if (functionCall == null) {
+					String empty = "Empty functionCall";
+					logger.log(Level.ERROR, empty);
 					mcpInterface.shutdown();
-					return "Empty functionCall";
+					return empty;
 				}
 
 				String functionName = (String) functionCall.get("name");
@@ -120,6 +124,33 @@ public class MCPAgent {
 								);
 						logger.log(Level.ERROR, "executeFillAction: " + result);
 						break;
+					case "getStateImage":
+						String base64 = mcpInterface.getStateImage();
+						if (base64 != null) {
+							Map<String, Object> imageMsg = new HashMap<>();
+							imageMsg.put("role", "user");
+
+							List<Map<String, Object>> content = new ArrayList<>();
+							content.add(Map.of("type", "text", "text", "Here is the current GUI state."));
+
+							Map<String, Object> imageUrl = new HashMap<>();
+							imageUrl.put("url", "data:image/png;base64," + base64);
+							content.add(Map.of("type", "image_url", "image_url", imageUrl));
+
+							imageMsg.put("content", content);
+							messages.add(imageMsg);
+
+							result = "Screenshot attached.";
+						} else {
+							result = "Screenshot failed.";
+						}
+						logger.log(Level.ERROR, "getStateImage: " + result);
+						break;
+					case "stopTest":
+						String verdict = (String) arguments.get("verdict");
+						mcpInterface.stopTest(verdict);
+						logger.log(Level.ERROR, "stopTest: " + verdict);
+						return verdict;
 					default:
 						String unknown = "Unknown function: " + functionName;
 						logger.log(Level.ERROR, unknown);
@@ -148,6 +179,7 @@ public class MCPAgent {
 			}
 		}
 		mcpInterface.shutdown();
+		logger.log(Level.ERROR, "maxAction executed");
 		return "maxAction executed";
 	}
 
@@ -196,6 +228,25 @@ public class MCPAgent {
 								)
 						),
 						"required", List.of("cssSelector", "fillText")
+				)
+		));
+
+		functions.add(Map.of(
+				"name", "getStateImage",
+				"description", "Get an image of the current GUI state.",
+				"parameters", Map.of(
+						"type", "object",
+						"properties", new HashMap<>()
+				)
+		));
+
+		functions.add(Map.of(
+				"name", "stopTest",
+				"description", "Stop the test execution if considering the BDD test is completed.",
+				"parameters", Map.of(
+						"type", "object",
+						"properties", Map.of("verdict", Map.of("type", "string", "verdict", "The verdict decision to stop the test execution")),
+						"required", List.of("verdict")
 				)
 		));
 

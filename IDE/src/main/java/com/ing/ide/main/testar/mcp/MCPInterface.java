@@ -24,11 +24,10 @@ import org.apache.logging.log4j.Logger;
 import org.testar.monkey.alayer.Action;
 import org.testar.monkey.alayer.Tags;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Date;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Stream;
 
 public class MCPInterface {
@@ -116,7 +115,8 @@ public class MCPInterface {
                 PlaywrightWidget widget = new PlaywrightWidget(state, state, elementHandle);
 
                 // For widgets with CSS locators
-                if(!widget.get(PlaywrightTags.WebLocatorCSS, "").isEmpty()) {
+                if(!widget.get(PlaywrightTags.WebLocatorCSS, "").isEmpty()
+                        && !isExternalLink(state, widget.get(PlaywrightTags.WebHref, ""))) {
                     // Send it to the AI agent
                     cssStateWidgets.add(widget.get(PlaywrightTags.WebLocatorCSS));
                     // Save them in the INGenious object repository
@@ -135,6 +135,43 @@ public class MCPInterface {
         }
 
         return cssStateWidgets;
+    }
+
+    private boolean isExternalLink(PlaywrightState state, String href) {
+        if (href == null || href.isEmpty()) return false;
+
+        href = href.trim().toLowerCase();
+
+        // Consider these schemes always external
+        if (href.startsWith("mailto:") || href.startsWith("tel:") || href.startsWith("javascript:")) return true;
+
+        // Internal anchors or root-relative paths are internal
+        if (href.startsWith("/") || href.startsWith("#")) return false;
+
+        // Relative URLs without a scheme or domain are internal
+        if (!href.startsWith("http://") && !href.startsWith("https://")) return false;
+
+        // For full URLs, check domain
+        String testDomain = extractHostDomain(state.getPage().url());
+        return !href.contains(testDomain);
+    }
+
+    private String extractHostDomain(String url) {
+        try {
+            URI uri = new URI(url);
+            String host = uri.getHost();
+
+            if (host != null && host.startsWith("www.")) {
+                host = host.substring(4);
+            }
+
+            return host;
+
+        } catch (URISyntaxException e) {
+            logger.log(Level.ERROR, "Exception extracting the host domain of: " + url);
+        }
+
+        return "";
     }
 
     public String executeClickAction(String rawCssSelector) {
@@ -227,6 +264,19 @@ public class MCPInterface {
         }
 
         return normalized;
+    }
+
+    public String getStateImage() {
+        if (this.page == null) return "Error: No page initialized";
+
+        byte[] screenshotBytes = this.page.screenshot(
+                new Page.ScreenshotOptions().setFullPage(true)
+        );
+        return Base64.getEncoder().encodeToString(screenshotBytes);
+    }
+
+    public void stopTest(String verdict) {
+        shutdown();
     }
 
     public void shutdown() {
