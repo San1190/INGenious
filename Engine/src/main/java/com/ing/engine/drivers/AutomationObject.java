@@ -24,6 +24,8 @@ import com.microsoft.playwright.Page.GetByRoleOptions;
 import com.microsoft.playwright.Page.GetByTextOptions;
 import com.microsoft.playwright.Page.GetByTitleOptions;
 import com.microsoft.playwright.options.AriaRole;
+import org.apache.logging.log4j.LogManager;
+
 import java.time.Duration;
 
 import java.util.ArrayList;
@@ -148,8 +150,27 @@ public class AutomationObject {
     }
 
     private Locator getElementFromList(List<Locator> elements) {
+        if (elements == null || elements.isEmpty()) return null;
 
-        return elements != null && !elements.isEmpty() ? elements.get(0) : null;
+        // Check all locators and return the first one that matches exactly one element
+        for (Locator locator : elements) {
+            try {
+                if (locator != null && locator.count() == 1) {
+                    return locator;
+                } else {
+                    int count = locator != null ? locator.count() : -1;
+                    String msg = "Locator did not match exactly one element (matched " + count + "): " + locator;
+                    LogManager.getLogger().log(org.apache.logging.log4j.Level.WARN, msg);
+                }
+            } catch (Exception e) {
+                String msg = "Exception while evaluating locator: " + locator;
+                LogManager.getLogger().log(org.apache.logging.log4j.Level.ERROR, msg);
+            }
+        }
+
+        String msg = "No unique locator found from the provided list.";
+        LogManager.getLogger().log(org.apache.logging.log4j.Level.ERROR, msg);
+        return null;
     }
 
     public ObjectGroup<?> getORObject(String page, String object) {
@@ -251,18 +272,15 @@ public class AutomationObject {
     }
 
     private List<Locator> getElements(final List<ORAttribute> attributes) {
+        List<Locator> elements = new ArrayList<>();
         try {
-
-            String tag = "";
-            String value = "";
-            List<Locator> elements = new ArrayList<Locator>();
-            Locator e = null;
-            //elements = null;
             for (ORAttribute attr : attributes) {
-                if (!attr.getValue().trim().isEmpty()) {
-                    tag = attr.getName();
-                    value = getRuntimeValue(attr.getValue());
+                if (attr.getValue().trim().isEmpty()) continue;
 
+                String tag = attr.getName();
+                String value = getRuntimeValue(attr.getValue());
+
+                try {
                     switch (tag) {
                         case "Text":
                             System.out.println(foundElementBy("Text", value));
@@ -323,40 +341,35 @@ public class AutomationObject {
                             break;
                         case "Role":
                             System.out.println(foundElementBy("Role", value));
-                            String roleType;
-                            String name;
                             if (value.contains(";")) {
-                                roleType = value.split(";")[0].toUpperCase();
+                                String[] parts = value.split(";");
+                                String roleType = parts[0].toUpperCase();
                                 GetByRoleOptions roleOptions = new Page.GetByRoleOptions();
                                 if (value.toLowerCase().contains(";exact")) {
                                     roleOptions.setExact(true);
                                     value = value.replace(";exact", "").trim();
                                 }
-                                name = value.split(";")[1];
-                                roleOptions.setName(name);
-
+                                roleOptions.setName(parts[1]);
                                 elements.add(this.getPage().getByRole(AriaRole.valueOf(roleType), roleOptions));
                             } else {
                                 elements.add(this.getPage().getByRole(AriaRole.valueOf(value.toUpperCase())));
                             }
+                            break;
                         case "ChainedLocator":
-
-                            List<String> selectors = new ArrayList<>();
-                            selectors = Arrays.asList(value.split(";"));
+                            List<String> selectors = Arrays.asList(value.split(";"));
                             Locator locator = null;
                             for (int i = 0; i < selectors.size(); i++) {
                                 locator = chainLocators(selectors.get(i), i, this.getPage(), locator);
                             }
-                            //System.out.println(foundElementBy("Chained Locators", value));
                             elements.add(locator);
                             break;
                     }
-
-                    return elements;
+                } catch (Exception e) {
+                    String msg = String.format("Failed to create locator using [%s] with value [%s]", tag, value);
+                    LogManager.getLogger().log(org.apache.logging.log4j.Level.ERROR, msg);
                 }
-
             }
-            return null;
+            return elements.isEmpty() ? null : elements;
         } catch (Exception ex) {
             Logger.getLogger(this.getClass().getName()).log(Level.OFF, null, ex);
             return null;
@@ -364,18 +377,15 @@ public class AutomationObject {
     }
 
     private List<Locator> getElements(FrameLocator framelocator, final List<ORAttribute> attributes) {
+        List<Locator> elements = new ArrayList<>();
         try {
-            String tag = "";
-            String value = "";
-            List<Locator> elements = new ArrayList<Locator>();
-            Locator e = null;
-            //elements = null;
             for (ORAttribute attr : attributes) {
-                if (!attr.getValue().trim().isEmpty()) {
-                    tag = attr.getName();
-                    value = getRuntimeValue(attr.getValue());
-                    //value = attr.getValue();
+                if (attr.getValue().trim().isEmpty()) continue;
 
+                String tag = attr.getName();
+                String value = getRuntimeValue(attr.getValue());
+
+                try {
                     switch (tag) {
                         case "Text":
                             System.out.println(foundElementBy("Text", value));
@@ -436,40 +446,35 @@ public class AutomationObject {
                             break;
                         case "Role":
                             System.out.println(foundElementBy("Role", value));
-                            String roleType;
-                            String name;
                             if (value.contains(";")) {
-                                roleType = value.split(";")[0].toUpperCase();
+                                String[] parts = value.split(";");
+                                String roleType = parts[0].toUpperCase();
                                 FrameLocator.GetByRoleOptions roleOptions = new FrameLocator.GetByRoleOptions();
                                 if (value.toLowerCase().contains(";exact")) {
                                     roleOptions.setExact(true);
                                     value = value.replace(";exact", "").trim();
                                 }
-                                name = value.split(";")[1];
-                                roleOptions.setName(name);
-
+                                roleOptions.setName(parts[1]);
                                 elements.add(framelocator.getByRole(AriaRole.valueOf(roleType), roleOptions));
                             } else {
                                 elements.add(framelocator.getByRole(AriaRole.valueOf(value.toUpperCase())));
                             }
+                            break;
                         case "ChainedLocator":
-
-                            List<String> selectors = new ArrayList<>();
-                            selectors = Arrays.asList(value.split(";"));
+                            List<String> selectors = Arrays.asList(value.split(";"));
                             Locator locator = null;
                             for (int i = 0; i < selectors.size(); i++) {
                                 locator = chainLocators(selectors.get(i), i, framelocator, locator);
                             }
-                            //System.out.println(foundElementBy("Chained Locators", value));
                             elements.add(locator);
                             break;
                     }
-
-                    return elements;
+                } catch (Exception e) {
+                    String msg = String.format("Failed to create locator using [%s] with value [%s]", tag, value);
+                    LogManager.getLogger().log(org.apache.logging.log4j.Level.ERROR, msg);
                 }
-
             }
-            return null;
+            return elements.isEmpty() ? null : elements;
         } catch (Exception ex) {
             Logger.getLogger(this.getClass().getName()).log(Level.OFF, null, ex);
             return null;
