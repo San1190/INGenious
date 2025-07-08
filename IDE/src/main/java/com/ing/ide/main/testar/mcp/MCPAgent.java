@@ -54,6 +54,7 @@ public class MCPAgent {
 		messages.add(Map.of("role", "system", "content", "You are a BDD-GUI test agent. " +
 				"Your goal is to complete the BDD instructions. " +
 				"Use loadWebURL, getState, executeClickAction, and executeFillAction functions. " +
+				"Use checkExecutedActions function if you need memory assistance. " +
 				"When considering the BDD test is completed use the getStateImage and stopTest functions."));
 		messages.add(Map.of("role", "user", "content", "Begin by load the web url to be tested."));
 		messages.add(Map.of("role", "user", "content", "Get the current GUI state to obtain the available web elements."));
@@ -114,15 +115,23 @@ public class MCPAgent {
 						logger.log(Level.ERROR, "getState: " + result);
 						break;
 					case "executeClickAction":
-						result = mcpInterface.executeClickAction((String) arguments.get("cssSelector"));
+						result = mcpInterface.executeClickAction(
+								(String) arguments.get("bddStep"),
+								(String) arguments.get("cssSelector")
+						);
 						logger.log(Level.ERROR, "executeClickAction: " + result);
 						break;
 					case "executeFillAction":
 						result = mcpInterface.executeFillAction(
+								(String) arguments.get("bddStep"),
 								(String) arguments.get("cssSelector"),
 								(String) arguments.get("fillText")
-								);
+						);
 						logger.log(Level.ERROR, "executeFillAction: " + result);
+						break;
+					case "checkExecutedActions":
+						result = String.join(", ", mcpInterface.checkExecutedActions());
+						logger.log(Level.ERROR, "checkExecutedActions: " + result);
 						break;
 					case "getStateImage":
 						String base64 = mcpInterface.getStateImage();
@@ -147,10 +156,10 @@ public class MCPAgent {
 						logger.log(Level.ERROR, "getStateImage: " + result);
 						break;
 					case "stopTest":
-						String verdict = (String) arguments.get("verdict");
-						mcpInterface.stopTest(verdict);
-						logger.log(Level.ERROR, "stopTest: " + verdict);
-						return verdict;
+						String assertText = (String) arguments.get("assertText");
+						mcpInterface.stopTest(assertText);
+						logger.log(Level.ERROR, "stopTest: " + assertText);
+						return assertText;
 					default:
 						String unknown = "Unknown function: " + functionName;
 						logger.log(Level.ERROR, unknown);
@@ -207,17 +216,30 @@ public class MCPAgent {
 				"description", "Use a CSS selector to click an element.",
 				"parameters", Map.of(
 						"type", "object",
-						"properties", Map.of("cssSelector", Map.of("type", "string", "cssSelector", "The visible cssSelector of clickable element.")),
-						"required", List.of("cssSelector")
+						"properties", Map.of(
+								"bddStep", Map.of(
+										"type", "string",
+										"description", "The BDD step text associated with this action."
+								),
+								"cssSelector", Map.of(
+										"type", "string",
+										"description", "The visible CSS selector of the clickable element."
+								)
+						),
+						"required", List.of("bddStep", "cssSelector")
 				)
 		));
 
 		functions.add(Map.of(
 				"name", "executeFillAction",
-				"description", "Use a CSS selector to fill text into an element.",
+				"description", "Use a CSS selector to fill text into an input element.",
 				"parameters", Map.of(
 						"type", "object",
 						"properties", Map.of(
+								"bddStep", Map.of(
+										"type", "string",
+										"description", "The BDD step text associated with this action."
+								),
 								"cssSelector", Map.of(
 										"type", "string",
 										"description", "The CSS selector of the input element to be filled."
@@ -227,7 +249,16 @@ public class MCPAgent {
 										"description", "The text to be entered into the input element."
 								)
 						),
-						"required", List.of("cssSelector", "fillText")
+						"required", List.of("bddStep", "cssSelector", "fillText")
+				)
+		));
+
+		functions.add(Map.of(
+				"name", "checkExecutedActions",
+				"description", "Check the information of the executed actions during the BDD test process.",
+				"parameters", Map.of(
+						"type", "object",
+						"properties", new HashMap<>()
 				)
 		));
 
@@ -245,8 +276,13 @@ public class MCPAgent {
 				"description", "Stop the test execution if considering the BDD test is completed.",
 				"parameters", Map.of(
 						"type", "object",
-						"properties", Map.of("verdict", Map.of("type", "string", "verdict", "The verdict decision to stop the test execution")),
-						"required", List.of("verdict")
+						"properties", Map.of(
+								"assertText", Map.of(
+										"type", "string",
+										"assertText", "A visual text that can be used as technical text assert"
+								)
+						),
+						"required", List.of("assertText")
 				)
 		));
 

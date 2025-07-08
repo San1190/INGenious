@@ -46,6 +46,8 @@ public class MCPInterface {
     private List<ElementHandle> stateElements = new ArrayList<>();
     private PlaywrightState state;
 
+    private List<String> executedAction = new ArrayList<>();
+
     // Define selectors for clickable elements
     public final static String[] clickableSelectors = {
             "a",                       // Links
@@ -174,7 +176,7 @@ public class MCPInterface {
         return "";
     }
 
-    public String executeClickAction(String rawCssSelector) {
+    public String executeClickAction(String bddStep, String rawCssSelector) {
         if (this.page == null) return "Error: No page initialized";
 
         logger.log(Level.ERROR, "rawCssSelector: " + rawCssSelector);
@@ -201,15 +203,17 @@ public class MCPInterface {
             addActionTestStep(testCase, state, clickAction);
 
             clickAction.run(system, state, 0);
-            return "Executed Action in the widget " + cssSelector;
 
+            String actionDescription = "Executed Click Action in the widget " + cssSelector;
+            saveExecutedAction(actionDescription);
+            return actionDescription;
         } catch (Exception e) {
             logger.log(Level.ERROR, "Failed to execute action for selector: " + cssSelector + " - " + e.getMessage(), e);
             return "Error executing action: " + e.getMessage();
         }
     }
 
-    public String executeFillAction(String rawCssSelector, String fillText) {
+    public String executeFillAction(String bddStep, String rawCssSelector, String fillText) {
         if (this.page == null) return "Error: No page initialized";
 
         logger.log(Level.ERROR, "rawCssSelector: " + rawCssSelector);
@@ -236,8 +240,10 @@ public class MCPInterface {
             addActionTestStep(testCase, state, fillAction);
 
             fillAction.run(system, state, 0);
-            return "Executed Action in the widget " + cssSelector;
 
+            String actionDescription = "Executed Fill Action " + fillText + " in the widget " + cssSelector;
+            saveExecutedAction(actionDescription);
+            return actionDescription;
         } catch (Exception e) {
             logger.log(Level.ERROR, "Failed to execute action for selector: " + cssSelector + " - " + e.getMessage(), e);
             return "Error executing action: " + e.getMessage();
@@ -266,6 +272,14 @@ public class MCPInterface {
         return normalized;
     }
 
+    private void saveExecutedAction(String actionDescription) {
+        executedAction.add(actionDescription);
+    }
+
+    public List<String> checkExecutedActions() {
+        return executedAction;
+    }
+
     public String getStateImage() {
         if (this.page == null) return "Error: No page initialized";
 
@@ -275,7 +289,8 @@ public class MCPInterface {
         return Base64.getEncoder().encodeToString(screenshotBytes);
     }
 
-    public void stopTest(String verdict) {
+    public void stopTest(String assertText) {
+        addAssertTestStep(testCase, assertText);
         shutdown();
     }
 
@@ -407,5 +422,24 @@ public class MCPInterface {
             testStep.setDescription("Enter the value [<Data>] in the Field [<Object>]");
         }
         else testStep.setAction("Unknown");
+    }
+
+    private void addAssertTestStep(TestCase testCase, String assertText) {
+        // Add the state-page to the OR
+        String webPageTitle = state.getPage().title();
+        WebORPage webORPage = webOR.addPage(webPageTitle);
+
+        // Add the element to the OR
+        String elementDescription = "assert[text]";
+        ObjectGroup objectGroup = webORPage.addObjectGroup(elementDescription);
+        WebORObject webORObject = (WebORObject) objectGroup.addObject(elementDescription);
+        webORObject.setAttributeByName("Text", assertText);
+
+        // Create an INGenious action test step
+        TestStep testStep = testCase.addNewStep();
+        testStep.setReference(webORPage.getName());
+        testStep.setObject(webORObject.getName());
+        testStep.setAction("assertElementIsVisible");
+        testStep.setDescription("Assert if [<Object>] is visible");
     }
 }
