@@ -2,8 +2,6 @@ package com.ing.ide.main.testar.mcp;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ing.datalib.component.Project;
-import com.ing.datalib.or.ObjectRepository;
-import com.ing.datalib.or.web.WebOR;
 import okhttp3.*;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
@@ -15,34 +13,23 @@ import java.util.List;
 import java.util.Map;
 
 public class MCPAgent {
-	private static final String OPENAI_API_KEY = System.getenv("OPENAI_API");
-	private static final String OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
-	private static final OkHttpClient client = new OkHttpClient();
-	private static final ObjectMapper mapper = new ObjectMapper();
-
 
 	private static final Logger logger = LogManager.getLogger();
 
-	private final Project project;
-	private final ObjectRepository objectRepository;
-	private final WebOR webOR;
-	private final String webSUT;
+	private final String OPENAI_API_KEY = System.getenv("OPENAI_API");
+	private final String OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
+	private final String OPENAI_MODEL = "gpt-4o";
+	private final OkHttpClient client = new OkHttpClient();
+	private final ObjectMapper mapper = new ObjectMapper();
+
 	private final int maxActions;
 	private final String bddInstructions;
 	private final MCPInterface mcpInterface;
 
-	public MCPAgent(Project project, String webSUT, int maxActions, String bddInstructions) {
-		this.project = project;
-		this.webSUT = webSUT;
+	public MCPAgent(Project project, int maxActions, String bddInstructions) {
 		this.maxActions = maxActions;
 		this.bddInstructions = bddInstructions;
-
 		this.mcpInterface = new MCPInterface(project);
-
-		// Prepare the INGenious object repository used to store steps information
-		objectRepository = new ObjectRepository(project);
-		webOR = objectRepository.getWebOR();
-		webOR.setObjectRepository(objectRepository);
 	}
 
 	public String runLLMAgent() {
@@ -50,21 +37,12 @@ public class MCPAgent {
 			throw new IllegalStateException("Missing OPENAI_API env var.");
 		}
 
-		List<Map<String, Object>> messages = new ArrayList<>();
-		messages.add(Map.of("role", "system", "content", "You are a BDD-GUI test agent. " +
-				"Your goal is to complete the BDD instructions. " +
-				"Use loadWebURL, getState, executeClickAction, and executeFillAction functions. " +
-				"Use checkExecutedActions function if you need memory assistance. " +
-				"When considering the BDD test is completed use the getStateImage and stopTest functions."));
-		messages.add(Map.of("role", "user", "content", "Begin by load the web url to be tested."));
-		messages.add(Map.of("role", "user", "content", "Get the current GUI state to obtain the available web elements."));
-		messages.add(Map.of("role", "user", "content", this.bddInstructions));
-
+		List<Map<String, Object>> messages = defineMessages();
 		List<Map<String, Object>> functions = defineFunctions();
 
 		for (int step = 0; step < this.maxActions; step++) {
 			Map<String, Object> body = new HashMap<>();
-			body.put("model", "gpt-4o");
+			body.put("model", OPENAI_MODEL);
 			body.put("messages", messages);
 			body.put("functions", functions);
 			body.put("function_call", "auto");
@@ -192,15 +170,50 @@ public class MCPAgent {
 		return "maxAction executed";
 	}
 
-	private static List<Map<String, Object>> defineFunctions() {
+	private List<Map<String, Object>> defineMessages() {
+		List<Map<String, Object>> messages = new ArrayList<>();
+
+		messages.add(Map.of(
+				"role", "system",
+				"content", "You are a BDD-GUI test agent. " +
+						"Your goal is to complete the BDD instructions. " +
+						"Use loadWebURL, getState, executeClickAction, and executeFillAction functions. " +
+						"Use checkExecutedActions function if you need memory assistance. " +
+						"When considering the BDD test is completed use the getStateImage and stopTest functions.")
+		);
+
+		messages.add(Map.of(
+				"role", "user",
+				"content", "Begin by load the web url to be tested.")
+		);
+
+		messages.add(Map.of(
+				"role", "user",
+				"content", "Get the current GUI state to obtain the available web elements.")
+		);
+
+		messages.add(Map.of(
+				"role", "user",
+				"content", this.bddInstructions)
+		);
+
+		return messages;
+	}
+
+	private List<Map<String, Object>> defineFunctions() {
 		List<Map<String, Object>> functions = new ArrayList<>();
 
 		functions.add(Map.of(
 				"name", "loadWebURL",
-				"description", "Load the web URL to be tested",
+				"description", "Load the web URL to be tested.",
 				"parameters", Map.of(
 						"type", "object",
-						"properties", Map.of("url", Map.of("type", "string", "url", "The web url to be tested")),
+						"properties", Map.of(
+								"url", Map.of(
+										"type", "string",
+										"url", "The web url to be tested."
+								)
+						),
 						"required", List.of("url")
 				)
 		));
@@ -208,7 +221,10 @@ public class MCPAgent {
 		functions.add(Map.of(
 				"name", "getState",
 				"description", "Get all CSS selectors of clickable GUI elements from the current page.",
-				"parameters", Map.of("type", "object", "properties", new HashMap<>())
+				"parameters", Map.of(
+						"type", "object",
+						"properties", new HashMap<>()
+				)
 		));
 
 		functions.add(Map.of(
@@ -279,7 +295,7 @@ public class MCPAgent {
 						"properties", Map.of(
 								"assertText", Map.of(
 										"type", "string",
-										"assertText", "A visual text that can be used as technical text assert"
+										"assertText", "A visual text that can be used as technical text assert."
 								)
 						),
 						"required", List.of("assertText")

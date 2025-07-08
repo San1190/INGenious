@@ -37,11 +37,6 @@ public class MCPAgentPanel {
 		inputPanel.setLayout(new BorderLayout());
 
 		JPanel formPanel = new JPanel(new GridLayout(3, 2, 5, 5));
-		JLabel urlLabel = new JLabel("Enter URL:");
-		JTextField urlTextField = new JTextField(40);
-		urlTextField.setText("");
-		formPanel.add(urlLabel);
-		formPanel.add(urlTextField);
 
 		JLabel actionsLabel = new JLabel("Max Actions:");
 		JSpinner actionsSpinner = new JSpinner();
@@ -65,7 +60,6 @@ public class MCPAgentPanel {
 
 		inputPanel.add(bddPanel, BorderLayout.CENTER);
 
-
 		// Create a panel for buttons
 		JPanel buttonPanel = new JPanel();
 		JButton launchButton = new JButton("Launch");
@@ -73,7 +67,6 @@ public class MCPAgentPanel {
 
 		launchButton.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				String url = urlTextField.getText();
 				int maxActions = (Integer) actionsSpinner.getValue();
 				String bddInstructions = bddTextArea.getText();
 
@@ -82,7 +75,6 @@ public class MCPAgentPanel {
 
 				MCPAgent mcpAgent = new MCPAgent(
 						sMainFrame.getProject(),
-						url,
 						maxActions,
 						bddInstructions);
 
