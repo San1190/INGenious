@@ -129,12 +129,11 @@ public class MCPInterface {
                     // Prepare the web widget context to be sent to the AI agent
                     Map<String, String> widgetInfo = new LinkedHashMap<>();
                     widgetInfo.put("css", widget.get(PlaywrightTags.WebLocatorCSS));
-                    widgetInfo.put("text", widget.get(PlaywrightTags.WebTextContent, "").replaceAll("\\s+", " ").trim());
-                    widgetInfo.put("type", widget.get(PlaywrightTags.WebTagName, ""));
-                    widgetInfo.put("placeholder", widget.get(PlaywrightTags.WebPlaceholder, ""));
-                    widgetInfo.put("name", widget.get(PlaywrightTags.WebName, ""));
-                    widgetInfo.put("title", widget.get(PlaywrightTags.WebTitle, ""));
-                    widgetInfo.put("ariaLabel", widget.get(PlaywrightTags.WebAriaLabel, ""));
+                    widgetInfo.put("role", widget.get(PlaywrightTags.WebTagName));
+                    widgetInfo.put("text", widget.get(PlaywrightTags.WebLocatorText).replaceAll("\\s+", " ").trim());
+                    widgetInfo.put("placeholder", widget.get(PlaywrightTags.WebLocatorPlaceholder));
+                    widgetInfo.put("label", widget.get(PlaywrightTags.WebLocatorLabel));
+                    widgetInfo.put("alttext", widget.get(PlaywrightTags.WebLocatorAltText));
                     // Then serialize each widget as JSON or custom line format:
                     cssStateWidgets.add(widgetInfo.entrySet().stream()
                             .map(e -> e.getKey() + ": " + e.getValue())

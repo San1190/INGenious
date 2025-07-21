@@ -104,9 +104,11 @@
         if (el.labels && el.labels.length > 0) return el.labels[0].innerText;
         if (el.getAttribute('aria-label')) return el.getAttribute('aria-label');
         if (el.getAttribute('aria-labelledby')) {
-          const lbl = document.getElementById(el.getAttribute('aria-labelledby'));
-          if (lbl) return lbl.innerText;
+          const refId = el.getAttribute('aria-labelledby');
+          const labelEl = this.findElementDeep(refId);
+          if (labelEl) return labelEl.textContent.trim();
         }
+
         if (el.id) {
           const label = document.querySelector('label[for="' + el.id + '"]');
           if (label) return label.innerText;
@@ -116,6 +118,23 @@
         if (parentLabel) return parentLabel.innerText;
       } catch (e) {}
       return '';
+    },
+
+    findElementDeep: function (id, root = document) {
+      const traverse = (node) => {
+        if (!node) return null;
+        if (node.id === id) return node;
+        if (node.shadowRoot) {
+          const res = this.findElementDeep(id, node.shadowRoot);
+          if (res) return res;
+        }
+        for (const child of node.children || []) {
+          const res = traverse(child);
+          if (res) return res;
+        }
+        return null;
+      };
+      return traverse(root);
     },
 
     getAltText: function (el) {
