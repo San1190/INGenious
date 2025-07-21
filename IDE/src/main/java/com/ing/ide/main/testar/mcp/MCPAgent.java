@@ -116,6 +116,14 @@ public class MCPAgent {
 							);
 							logger.log(Level.ERROR, "executeFillAction: " + result);
 							break;
+						case "executeSelectAction":
+							result = mcpInterface.executeSelectAction(
+									(String) arguments.get("bddStep"),
+									(String) arguments.get("cssSelector"),
+									(String) arguments.get("optionValue")
+							);
+							logger.log(Level.ERROR, "executeSelectAction: " + result);
+							break;
 						case "checkExecutedActions":
 							result = mcpInterface.checkExecutedActions();
 							logger.log(Level.ERROR, "checkExecutedActions: " + result);
@@ -216,7 +224,7 @@ public class MCPAgent {
 				"role", "system",
 				"content", "You are a BDD-GUI test agent. " +
 						"Your goal is to complete the BDD instructions. " +
-						"Use loadWebURL, getState, executeClickAction, and executeFillAction functions. " +
+						"Use loadWebURL, getState, executeClickAction, executeFillAction, and executeSelectAction functions. " +
 						"Use checkExecutedActions function if you need memory assistance. " +
 						"When considering the BDD test is completed use the getStateImage and addFinalAssert functions.")
 		);
@@ -305,6 +313,29 @@ public class MCPAgent {
 								)
 						),
 						"required", List.of("bddStep", "cssSelector", "fillText")
+				)
+		));
+
+		functions.add(Map.of(
+				"name", "executeSelectAction",
+				"description", "Use a CSS selector to select an option value into a select element.",
+				"parameters", Map.of(
+						"type", "object",
+						"properties", Map.of(
+								"bddStep", Map.of(
+										"type", "string",
+										"description", "The BDD step text associated with this action."
+								),
+								"cssSelector", Map.of(
+										"type", "string",
+										"description", "The CSS selector of the input element to be filled."
+								),
+								"optionValue", Map.of(
+										"type", "string",
+										"description", "The option value to be selected into the select element."
+								)
+						),
+						"required", List.of("bddStep", "cssSelector", "optionValue")
 				)
 		));
 

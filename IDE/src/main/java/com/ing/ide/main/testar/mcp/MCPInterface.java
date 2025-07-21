@@ -11,6 +11,7 @@ import com.ing.datalib.or.web.WebORObject;
 import com.ing.datalib.or.web.WebORPage;
 import com.ing.ide.main.testar.playwright.actions.PlaywrightClick;
 import com.ing.ide.main.testar.playwright.actions.PlaywrightFill;
+import com.ing.ide.main.testar.playwright.actions.PlaywrightSelect;
 import com.ing.ide.main.testar.playwright.system.PlaywrightSUT;
 import com.ing.ide.main.testar.playwright.system.PlaywrightState;
 import com.ing.ide.main.testar.playwright.system.PlaywrightTags;
@@ -59,7 +60,6 @@ public class MCPInterface {
             "input[type='reset']",     // Input reset button
             "input[type='checkbox']",  // Checkbox inputs
             "input[type='radio']",     // Radio button inputs
-            "select",                  // Dropdowns
             "[onclick]",               // Elements with onclick attributes (custom clickable elements)
             "[role='button']"          // Elements with a role attribute as buttons (often used in modern UIs)
     };
@@ -71,6 +71,11 @@ public class MCPInterface {
             "input[class='input']",    // Input fields
             "input[type='email']",     // Email input fields
             "input[type='password']"   // Password input fields
+    };
+
+    // Define selectors for selectable elements
+    public final static String[] selectableSelectors = {
+            "select"                   // Dropdowns
     };
 
     public MCPInterface(Project project) {
@@ -113,10 +118,11 @@ public class MCPInterface {
         try {
             state = new PlaywrightState(system);
 
-            String interactiveWidgetsSelector = String.join(", ", Stream.concat(
+            String interactiveWidgetsSelector = String.join(", ", Stream.of(
                     Arrays.stream(clickableSelectors),
-                    Arrays.stream(fillableSelectors)
-            ).toArray(String[]::new));
+                    Arrays.stream(fillableSelectors),
+                    Arrays.stream(selectableSelectors)
+            ).flatMap(s -> s).toArray(String[]::new));
             stateElements = state.getPage().querySelectorAll(interactiveWidgetsSelector);
 
             for (ElementHandle elementHandle : stateElements) {
@@ -130,10 +136,30 @@ public class MCPInterface {
                     Map<String, String> widgetInfo = new LinkedHashMap<>();
                     widgetInfo.put("css", widget.get(PlaywrightTags.WebLocatorCSS));
                     widgetInfo.put("role", widget.get(PlaywrightTags.WebTagName));
-                    widgetInfo.put("text", widget.get(PlaywrightTags.WebLocatorText).replaceAll("\\s+", " ").trim());
+
                     widgetInfo.put("placeholder", widget.get(PlaywrightTags.WebLocatorPlaceholder));
                     widgetInfo.put("label", widget.get(PlaywrightTags.WebLocatorLabel));
                     widgetInfo.put("alttext", widget.get(PlaywrightTags.WebLocatorAltText));
+
+                    // For select elements list the available options
+                    if ("select".equalsIgnoreCase(widget.get(PlaywrightTags.WebTagName, ""))) {
+                        List<ElementHandle> options = elementHandle.querySelectorAll("option");
+                        List<String> optionValues = new ArrayList<>();
+
+                        for (ElementHandle option : options) {
+                            String value = option.getAttribute("value");
+                            optionValues.add(value != null ? value : "");
+                        }
+
+                        if (!optionValues.isEmpty()) {
+                            widgetInfo.put("options", String.join(", ", optionValues));
+                        }
+                    }
+                    // Otherwise, add the text content
+                    else {
+                        widgetInfo.put("text", widget.get(PlaywrightTags.WebLocatorText).replaceAll("\\s+", " ").trim());
+                    }
+
                     // Then serialize each widget as JSON or custom line format:
                     cssStateWidgets.add(widgetInfo.entrySet().stream()
                             .map(e -> e.getKey() + ": " + e.getValue())
@@ -267,6 +293,43 @@ public class MCPInterface {
         } catch (Exception e) {
             logger.log(Level.ERROR, "Failed to execute action for selector: " + cssSelector + " - " + e.getMessage(), e);
             return "ISSUE executing a fill action: " + e.getMessage();
+        }
+    }
+
+    public String executeSelectAction(String bddStep, String rawCssSelector, String optionValue) {
+        if (this.page == null) return "ISSUE: No web state-page initialized";
+
+        logger.log(Level.ERROR, "rawCssSelector: " + rawCssSelector);
+
+        String cssSelector = normalizeCssSelector(rawCssSelector);
+
+        if (cssSelector == null || cssSelector.trim().isEmpty()) {
+            logger.log(Level.ERROR, "ISSUE with an invalid CSS selector: " + rawCssSelector);
+            return "ISSUE with an invalid CSS selector: " + rawCssSelector;
+        }
+
+        try {
+            logger.log(Level.ERROR, "Normalized CSS Selector: " + cssSelector);
+
+            ElementHandle elementHandle = this.page.querySelector(cssSelector);
+
+            if (elementHandle == null) {
+                logger.log(Level.ERROR, "ISSUE because no matching element found for CSS selector: " + cssSelector);
+                return "ISSUE because no matching element found for CSS selector: " + cssSelector;
+            }
+
+            PlaywrightWidget widget = new PlaywrightWidget(state, state, elementHandle);
+            PlaywrightSelect selectAction = new PlaywrightSelect(widget, optionValue);
+            addActionTestStep(testCase, state, selectAction);
+
+            selectAction.run(system, state, 0);
+
+            String actionDescription = "Select value " + optionValue + " in the widget " + cssSelector;
+            saveExecutedAction(actionDescription);
+            return actionDescription;
+        } catch (Exception e) {
+            logger.log(Level.ERROR, "Failed to execute select action for selector: " + cssSelector + " - " + e.getMessage(), e);
+            return "ISSUE executing a select action: " + e.getMessage();
         }
     }
 
@@ -456,6 +519,11 @@ public class MCPInterface {
             testStep.setAction("Fill");
             testStep.setInput("@" + ((PlaywrightFill)action).getTypedText());
             testStep.setDescription("Enter the value [<Data>] in the Field [<Object>]");
+        }
+        else if(action instanceof PlaywrightSelect) {
+            testStep.setAction("SelectSingleByText");
+            testStep.setInput("@" + ((PlaywrightSelect)action).getOptionValue());
+            testStep.setDescription("Select item in [<Object>] which has text: [<Data>]");
         }
         else testStep.setAction("Unknown");
     }
