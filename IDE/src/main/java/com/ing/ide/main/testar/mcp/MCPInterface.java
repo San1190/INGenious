@@ -16,6 +16,7 @@ import com.ing.ide.main.testar.playwright.system.PlaywrightState;
 import com.ing.ide.main.testar.playwright.system.PlaywrightTags;
 import com.ing.ide.main.testar.playwright.system.PlaywrightWidget;
 import com.microsoft.playwright.ElementHandle;
+import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.PlaywrightException;
 import org.apache.logging.log4j.Level;
@@ -28,6 +29,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class MCPInterface {
@@ -46,7 +48,7 @@ public class MCPInterface {
     private List<ElementHandle> stateElements = new ArrayList<>();
     private PlaywrightState state;
 
-    private List<String> executedAction = new ArrayList<>();
+    private final List<String> executedAction = new ArrayList<>();
 
     // Define selectors for clickable elements
     public final static String[] clickableSelectors = {
@@ -84,13 +86,14 @@ public class MCPInterface {
         this.testCase = scenario.addTestCase(timestamp);
     }
 
-    public boolean loadWebURL(String url){
+    public String loadWebURL(String url){
         try {
             this.system = new PlaywrightSUT(url);
             this.page = this.system.getPage();
         } catch (Exception e) {
             logger.log(Level.ERROR, "Failed to run PlaywrightSUT with URL: " + url);
-            return false;
+            logger.log(Level.ERROR, e.getMessage());
+            return "ISSUE loading the Web URL: " + e.getMessage();
         }
 
         TestStep initialTestStep = testCase.addNewStep();
@@ -99,14 +102,17 @@ public class MCPInterface {
         initialTestStep.setAction("Open");
         initialTestStep.setInput("@".concat(url));
 
-        return true;
+        return "Web URL loaded successfully!";
     }
 
-    public List<String> getState() {
-        state = new PlaywrightState(system);
+    public String getState() {
+        if (this.page == null) return "ISSUE: No web state-page initialized";
+
         List<String> cssStateWidgets = new ArrayList<>();
 
         try {
+            state = new PlaywrightState(system);
+
             String interactiveWidgetsSelector = String.join(", ", Stream.concat(
                     Arrays.stream(clickableSelectors),
                     Arrays.stream(fillableSelectors)
@@ -119,8 +125,22 @@ public class MCPInterface {
                 // For widgets with CSS locators
                 if(!widget.get(PlaywrightTags.WebLocatorCSS, "").isEmpty()
                         && !isExternalLink(state, widget.get(PlaywrightTags.WebHref, ""))) {
-                    // Send it to the AI agent
-                    cssStateWidgets.add(widget.get(PlaywrightTags.WebLocatorCSS));
+
+                    // Prepare the web widget context to be sent to the AI agent
+                    Map<String, String> widgetInfo = new LinkedHashMap<>();
+                    widgetInfo.put("css", widget.get(PlaywrightTags.WebLocatorCSS));
+                    widgetInfo.put("text", widget.get(PlaywrightTags.WebTextContent, "").replaceAll("\\s+", " ").trim());
+                    widgetInfo.put("type", widget.get(PlaywrightTags.WebTagName, ""));
+                    widgetInfo.put("placeholder", widget.get(PlaywrightTags.WebPlaceholder, ""));
+                    widgetInfo.put("name", widget.get(PlaywrightTags.WebName, ""));
+                    widgetInfo.put("title", widget.get(PlaywrightTags.WebTitle, ""));
+                    widgetInfo.put("ariaLabel", widget.get(PlaywrightTags.WebAriaLabel, ""));
+                    // Then serialize each widget as JSON or custom line format:
+                    cssStateWidgets.add(widgetInfo.entrySet().stream()
+                            .map(e -> e.getKey() + ": " + e.getValue())
+                            .collect(Collectors.joining(" | "))
+                    );
+
                     // Save them in the INGenious object repository
                     String webPageTitle = state.getPage().title();
                     WebORPage webORPage = webOR.addPage(webPageTitle);
@@ -134,9 +154,10 @@ public class MCPInterface {
 
         } catch (PlaywrightException e) {
             logger.log(Level.ERROR, "Failed to collect state interactive elements: " + e.getMessage());
+            return "ISSUE trying to obtain state information: " + e.getMessage();
         }
 
-        return cssStateWidgets;
+        return String.join("\n", cssStateWidgets);
     }
 
     private boolean isExternalLink(PlaywrightState state, String href) {
@@ -177,15 +198,15 @@ public class MCPInterface {
     }
 
     public String executeClickAction(String bddStep, String rawCssSelector) {
-        if (this.page == null) return "Error: No page initialized";
+        if (this.page == null) return "ISSUE: No web state-page initialized";
 
         logger.log(Level.ERROR, "rawCssSelector: " + rawCssSelector);
 
         String cssSelector = normalizeCssSelector(rawCssSelector);
 
         if (cssSelector == null || cssSelector.trim().isEmpty()) {
-            logger.log(Level.ERROR, "Invalid CSS selector: " + rawCssSelector);
-            return "Error: Invalid CSS selector";
+            logger.log(Level.ERROR, "ISSUE with an invalid CSS selector: " + rawCssSelector);
+            return "ISSUE with an invalid CSS selector: " + rawCssSelector;
         }
 
         try {
@@ -194,8 +215,8 @@ public class MCPInterface {
             ElementHandle elementHandle = this.page.querySelector(cssSelector);
 
             if (elementHandle == null) {
-                logger.log(Level.ERROR, "No matching element found: " + cssSelector);
-                return "No matching element found";
+                logger.log(Level.ERROR, "ISSUE because no matching element found for CSS selector: " + cssSelector);
+                return "ISSUE because no matching element found for CSS selector: " + cssSelector;
             }
 
             PlaywrightWidget widget = new PlaywrightWidget(state, state, elementHandle);
@@ -209,20 +230,20 @@ public class MCPInterface {
             return actionDescription;
         } catch (Exception e) {
             logger.log(Level.ERROR, "Failed to execute action for selector: " + cssSelector + " - " + e.getMessage(), e);
-            return "Error executing action: " + e.getMessage();
+            return "ISSUE executing a click action: " + e.getMessage();
         }
     }
 
     public String executeFillAction(String bddStep, String rawCssSelector, String fillText) {
-        if (this.page == null) return "Error: No page initialized";
+        if (this.page == null) return "ISSUE: No web state-page initialized";
 
         logger.log(Level.ERROR, "rawCssSelector: " + rawCssSelector);
 
         String cssSelector = normalizeCssSelector(rawCssSelector);
 
         if (cssSelector == null || cssSelector.trim().isEmpty()) {
-            logger.log(Level.ERROR, "Invalid CSS selector: " + rawCssSelector);
-            return "Error: Invalid CSS selector";
+            logger.log(Level.ERROR, "ISSUE with an invalid CSS selector: " + rawCssSelector);
+            return "ISSUE with an invalid CSS selector: " + rawCssSelector;
         }
 
         try {
@@ -231,8 +252,8 @@ public class MCPInterface {
             ElementHandle elementHandle = this.page.querySelector(cssSelector);
 
             if (elementHandle == null) {
-                logger.log(Level.ERROR, "No matching element found: " + cssSelector);
-                return "No matching element found";
+                logger.log(Level.ERROR, "ISSUE because no matching element found for CSS selector: " + cssSelector);
+                return "ISSUE because no matching element found for CSS selector: " + cssSelector;
             }
 
             PlaywrightWidget widget = new PlaywrightWidget(state, state, elementHandle);
@@ -246,7 +267,7 @@ public class MCPInterface {
             return actionDescription;
         } catch (Exception e) {
             logger.log(Level.ERROR, "Failed to execute action for selector: " + cssSelector + " - " + e.getMessage(), e);
-            return "Error executing action: " + e.getMessage();
+            return "ISSUE executing a fill action: " + e.getMessage();
         }
     }
 
@@ -276,22 +297,38 @@ public class MCPInterface {
         executedAction.add(actionDescription);
     }
 
-    public List<String> checkExecutedActions() {
-        return executedAction;
+    public String checkExecutedActions() {
+        if(executedAction.isEmpty()) return "No executed actions yet!";
+
+        return String.join(", ", executedAction);
     }
 
     public String getStateImage() {
-        if (this.page == null) return "Error: No page initialized";
-
-        byte[] screenshotBytes = this.page.screenshot(
-                new Page.ScreenshotOptions().setFullPage(true)
-        );
-        return Base64.getEncoder().encodeToString(screenshotBytes);
+        try {
+            byte[] screenshotBytes = this.page.screenshot(
+                    new Page.ScreenshotOptions().setFullPage(true)
+            );
+            return Base64.getEncoder().encodeToString(screenshotBytes);
+        } catch (Exception e){
+            logger.log(Level.ERROR, "Failed to obtain the getStateImage: " + e.getMessage());
+            return ""; // This empty string is used in the MCPAgent switch
+        }
     }
 
-    public void stopTest(String assertText) {
+    public String addFinalAssert(String bddStep, String assertText) {
+        if (this.page == null) return "ISSUE: No web state-page initialized";
+
+        // Verify that the LLM assertText can be used as locator for assertion
+        Locator locator = page.locator("text=" + assertText);
+        if (locator.count() == 0 ) {
+            return "ISSUE: The provided text does not match with any GUI web element";
+        } else if (!locator.first().isVisible()) {
+            return "ISSUE: The assert text is correct but the GUI web element is not visible";
+        }
+
         addAssertTestStep(testCase, assertText);
-        shutdown();
+
+        return "OK";
     }
 
     public void shutdown() {

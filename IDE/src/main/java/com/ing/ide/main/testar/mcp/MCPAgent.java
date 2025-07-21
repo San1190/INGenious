@@ -55,116 +55,155 @@ public class MCPAgent {
 					.post(RequestBody.create(MediaType.parse("application/json"), mapper.writeValueAsString(body)))
 					.build()
 			).execute()) {
-				if (!response.isSuccessful()) {
-					String failed = "OpenAI call failed: " + response.code();
+				if(response.isSuccessful()) {
+					String json = response.body().string();
+					Map<?, ?> parsed = mapper.readValue(json, Map.class);
+					Map<?, ?> choice = ((List<Map<?, ?>>) parsed.get("choices")).get(0);
+					Map<?, ?> message = (Map<?, ?>) choice.get("message");
+
+					Map<?, ?> functionCall = (Map<?, ?>) message.get("function_call");
+
+					// Don't stop, give the LLM another chance
+					if (functionCall == null) {
+						String feedback = "ISSUE: No function was selected. Please review the last function results or feedback messages.";
+						logger.log(Level.ERROR, feedback);
+
+						Map<String, Object> functionMsg = new HashMap<>();
+						functionMsg.put("role", "function");
+						functionMsg.put("name", "undefined");
+						functionMsg.put("content", feedback);
+						messages.add(functionMsg);
+
+						Map<String, Object> userHint = new HashMap<>();
+						userHint.put("role", "user");
+						userHint.put("content", "Reminder: You must choose a valid function to proceed.");
+						messages.add(userHint);
+
+						continue;
+					}
+
+					String functionName = (String) functionCall.get("name");
+					String argumentsJson = (String) functionCall.get("arguments");
+					Map<String, Object> arguments = mapper.readValue(argumentsJson, Map.class);
+
+					logger.log(Level.ERROR, "DEBUG functionName: " + functionName);
+					logger.log(Level.ERROR, "DEBUG argumentsJson: " + argumentsJson);
+
+					String result;
+					boolean stopExecution = false;
+					String feedbackMessage = "";
+					switch (functionName) {
+						case "loadWebURL":
+							result = mcpInterface.loadWebURL((String) arguments.get("url"));
+							logger.log(Level.ERROR, "loadWebURL: " + result);
+							break;
+						case "getState":
+							result = mcpInterface.getState();
+							logger.log(Level.ERROR, "getState: " + result);
+							break;
+						case "executeClickAction":
+							result = mcpInterface.executeClickAction(
+									(String) arguments.get("bddStep"),
+									(String) arguments.get("cssSelector")
+							);
+							logger.log(Level.ERROR, "executeClickAction: " + result);
+							break;
+						case "executeFillAction":
+							result = mcpInterface.executeFillAction(
+									(String) arguments.get("bddStep"),
+									(String) arguments.get("cssSelector"),
+									(String) arguments.get("fillText")
+							);
+							logger.log(Level.ERROR, "executeFillAction: " + result);
+							break;
+						case "checkExecutedActions":
+							result = mcpInterface.checkExecutedActions();
+							logger.log(Level.ERROR, "checkExecutedActions: " + result);
+							break;
+						case "getStateImage":
+							String base64 = mcpInterface.getStateImage();
+							if (!base64.isEmpty()) {
+								Map<String, Object> imageMsg = new HashMap<>();
+								imageMsg.put("role", "user");
+
+								List<Map<String, Object>> content = new ArrayList<>();
+								content.add(Map.of("type", "text", "text", "Here is the current GUI state."));
+
+								Map<String, Object> imageUrl = new HashMap<>();
+								imageUrl.put("url", "data:image/png;base64," + base64);
+								content.add(Map.of("type", "image_url", "image_url", imageUrl));
+
+								imageMsg.put("content", content);
+								messages.add(imageMsg);
+
+								result = "Screenshot attached!";
+							} else {
+								result = "ISSUE: Screenshot failed to obtain.";
+							}
+							logger.log(Level.ERROR, "getStateImage: " + result);
+							break;
+						case "addFinalAssert":
+							result = mcpInterface.addFinalAssert(
+									(String) arguments.get("bddStep"),
+									(String) arguments.get("assertText")
+							);
+							logger.log(Level.ERROR, "addFinalAssert: " + result);
+
+							if ("OK".equals(result)) {
+								stopExecution = true;
+							} else {
+								feedbackMessage = "The final text assertion failed. Try again with a correct text locator.";
+							}
+
+							break;
+						default:
+							result = "Unknown function: " + functionName;
+							feedbackMessage = "The function was not recognized. Check the available options.";
+							logger.log(Level.ERROR, result);
+					}
+
+					Map<String, Object> assistantMsg = new HashMap<>();
+					assistantMsg.put("role", "assistant");
+					assistantMsg.put("content", null);
+					Map<String, Object> funcCall = new HashMap<>();
+					funcCall.put("name", functionName);
+					funcCall.put("arguments", argumentsJson);
+					assistantMsg.put("function_call", funcCall);
+					messages.add(assistantMsg);
+
+					Map<String, Object> functionMsg = new HashMap<>();
+					functionMsg.put("role", "function");
+					functionMsg.put("name", functionName);
+					functionMsg.put("content", result != null ? result : "null");
+					messages.add(functionMsg);
+
+					// Extra guidance feedback needed
+					if (!feedbackMessage.isEmpty()) {
+						Map<String, Object> userReminder = new HashMap<>();
+						userReminder.put("role", "user");
+						userReminder.put("content", feedbackMessage);
+						messages.add(userReminder);
+					}
+
+					// Stop execution flag
+					if (stopExecution) {
+						mcpInterface.shutdown();
+						return result;
+					}
+				} else if (response.code() == 429){
+					logger.log(Level.ERROR, "OpenAI rate limited (429)... wait 10 seconds...");
+					Thread.sleep(10000L);
+				} else {
+					String failed = "Stop execution due to OpenAI call fail: " + response.code();
 					logger.log(Level.ERROR, failed);
 					return failed;
 				}
-
-				String json = response.body().string();
-				Map<?, ?> parsed = mapper.readValue(json, Map.class);
-				Map<?, ?> choice = ((List<Map<?, ?>>) parsed.get("choices")).get(0);
-				Map<?, ?> message = (Map<?, ?>) choice.get("message");
-
-				Map<?, ?> functionCall = (Map<?, ?>) message.get("function_call");
-
-				if (functionCall == null) {
-					String empty = "Empty functionCall";
-					logger.log(Level.ERROR, empty);
-					mcpInterface.shutdown();
-					return empty;
-				}
-
-				String functionName = (String) functionCall.get("name");
-				String argumentsJson = (String) functionCall.get("arguments");
-				Map<String, Object> arguments = mapper.readValue(argumentsJson, Map.class);
-
-				logger.log(Level.ERROR, "DEBUG functionName: " + functionName);
-				logger.log(Level.ERROR, "DEBUG argumentsJson: " + argumentsJson);
-
-				String result;
-				switch (functionName) {
-					case "loadWebURL":
-						result = String.valueOf(mcpInterface.loadWebURL((String) arguments.get("url")));
-						logger.log(Level.ERROR, "loadWebURL: " + result);
-						break;
-					case "getState":
-						result = String.join(", ", mcpInterface.getState());
-						logger.log(Level.ERROR, "getState: " + result);
-						break;
-					case "executeClickAction":
-						result = mcpInterface.executeClickAction(
-								(String) arguments.get("bddStep"),
-								(String) arguments.get("cssSelector")
-						);
-						logger.log(Level.ERROR, "executeClickAction: " + result);
-						break;
-					case "executeFillAction":
-						result = mcpInterface.executeFillAction(
-								(String) arguments.get("bddStep"),
-								(String) arguments.get("cssSelector"),
-								(String) arguments.get("fillText")
-						);
-						logger.log(Level.ERROR, "executeFillAction: " + result);
-						break;
-					case "checkExecutedActions":
-						result = String.join(", ", mcpInterface.checkExecutedActions());
-						logger.log(Level.ERROR, "checkExecutedActions: " + result);
-						break;
-					case "getStateImage":
-						String base64 = mcpInterface.getStateImage();
-						if (base64 != null) {
-							Map<String, Object> imageMsg = new HashMap<>();
-							imageMsg.put("role", "user");
-
-							List<Map<String, Object>> content = new ArrayList<>();
-							content.add(Map.of("type", "text", "text", "Here is the current GUI state."));
-
-							Map<String, Object> imageUrl = new HashMap<>();
-							imageUrl.put("url", "data:image/png;base64," + base64);
-							content.add(Map.of("type", "image_url", "image_url", imageUrl));
-
-							imageMsg.put("content", content);
-							messages.add(imageMsg);
-
-							result = "Screenshot attached.";
-						} else {
-							result = "Screenshot failed.";
-						}
-						logger.log(Level.ERROR, "getStateImage: " + result);
-						break;
-					case "stopTest":
-						String assertText = (String) arguments.get("assertText");
-						mcpInterface.stopTest(assertText);
-						logger.log(Level.ERROR, "stopTest: " + assertText);
-						return assertText;
-					default:
-						String unknown = "Unknown function: " + functionName;
-						logger.log(Level.ERROR, unknown);
-						mcpInterface.shutdown();
-						return unknown;
-				}
-
-				Map<String, Object> assistantMsg = new HashMap<>();
-				assistantMsg.put("role", "assistant");
-				assistantMsg.put("content", null);
-				Map<String, Object> funcCall = new HashMap<>();
-				funcCall.put("name", functionName);
-				funcCall.put("arguments", argumentsJson);
-				assistantMsg.put("function_call", funcCall);
-				messages.add(assistantMsg);
-
-				Map<String, Object> functionMsg = new HashMap<>();
-				functionMsg.put("role", "function");
-				functionMsg.put("name", functionName);
-				functionMsg.put("content", result != null ? result : "null");
-				messages.add(functionMsg);
-
 			} catch (Exception e) {
 				e.printStackTrace();
 				break;
 			}
 		}
+
 		mcpInterface.shutdown();
 		logger.log(Level.ERROR, "maxAction executed");
 		return "maxAction executed";
@@ -179,7 +218,7 @@ public class MCPAgent {
 						"Your goal is to complete the BDD instructions. " +
 						"Use loadWebURL, getState, executeClickAction, and executeFillAction functions. " +
 						"Use checkExecutedActions function if you need memory assistance. " +
-						"When considering the BDD test is completed use the getStateImage and stopTest functions.")
+						"When considering the BDD test is completed use the getStateImage and addFinalAssert functions.")
 		);
 
 		messages.add(Map.of(
@@ -220,7 +259,7 @@ public class MCPAgent {
 
 		functions.add(Map.of(
 				"name", "getState",
-				"description", "Get all CSS selectors of clickable GUI elements from the current page.",
+				"description", "Get a list of current interactive GUI web elements with CSS selector, visible text, tag type, and accessibility attributes.",
 				"parameters", Map.of(
 						"type", "object",
 						"properties", new HashMap<>()
@@ -239,7 +278,7 @@ public class MCPAgent {
 								),
 								"cssSelector", Map.of(
 										"type", "string",
-										"description", "The visible CSS selector of the clickable element."
+										"description", "The CSS selector of the clickable element."
 								)
 						),
 						"required", List.of("bddStep", "cssSelector")
@@ -288,17 +327,21 @@ public class MCPAgent {
 		));
 
 		functions.add(Map.of(
-				"name", "stopTest",
-				"description", "Stop the test execution if considering the BDD test is completed.",
+				"name", "addFinalAssert",
+				"description", "Add a text assert as final step in the BDD test execution.",
 				"parameters", Map.of(
 						"type", "object",
 						"properties", Map.of(
+								"bddStep", Map.of(
+										"type", "string",
+										"description", "The BDD step text associated with this action."
+								),
 								"assertText", Map.of(
 										"type", "string",
-										"assertText", "A visual text that can be used as technical text assert."
+										"assertText", "A visible text that can be used as text locator assert."
 								)
 						),
-						"required", List.of("assertText")
+						"required", List.of("bddStep", "assertText")
 				)
 		));
 
