@@ -30,6 +30,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -170,7 +171,7 @@ public class MCPInterface {
                     String webPageTitle = state.getPage().title();
                     WebORPage webORPage = webOR.addPage(webPageTitle);
                     try {
-                        addActionObject(webORPage, new PlaywrightClick(widget));
+                        addWidgetObject(webORPage, widget);
                     } catch (Exception e) {
                         logger.log(Level.ERROR, "Failed add action objects to the OR" + e.getMessage());
                     }
@@ -404,24 +405,61 @@ public class MCPInterface {
     }
 
     /** Add the action-element info into INGenious */
-    private WebORObject addActionObject(WebORPage webORPage, Action action) {
-        PlaywrightWidget playwrightWidget = (PlaywrightWidget) action.get(Tags.OriginWidget);
-
+    private WebORObject addWidgetObject(WebORPage webORPage, PlaywrightWidget playwrightWidget) {
         String elementDescription = describeElement(playwrightWidget);
         ObjectGroup objectGroup = webORPage.addObjectGroup(elementDescription);
         WebORObject webORObject = (WebORObject) objectGroup.addObject(elementDescription);
 
+        String text = playwrightWidget.get(PlaywrightTags.WebLocatorText);
+        if (text != null && !text.isEmpty()) {
+            String evaluatedText = evaluateLocatorWithExactFallback(
+                    exact -> {
+                        Page.GetByTextOptions opts = new Page.GetByTextOptions().setExact(exact);
+                        return page.getByText(text, opts);
+                    }, text
+            );
+            webORObject.setAttributeByName("Text", evaluatedText);
+        }
+
+        String label = playwrightWidget.get(PlaywrightTags.WebLocatorLabel);
+        if (label != null && !label.isEmpty()) {
+            String evaluatedLabel = evaluateLocatorWithExactFallback(
+                    exact -> {
+                        Page.GetByLabelOptions opts = new Page.GetByLabelOptions().setExact(exact);
+                        return page.getByLabel(label, opts);
+                    }, label
+            );
+            webORObject.setAttributeByName("Label", evaluatedLabel);
+        }
+
         webORObject.setAttributeByName("Role", playwrightWidget.get(PlaywrightTags.WebLocatorRole));
         webORObject.setXpath(playwrightWidget.get(PlaywrightTags.WebLocatorXPath));
-        webORObject.setAttributeByName("Text", playwrightWidget.get(PlaywrightTags.WebLocatorText));
         webORObject.setCss(playwrightWidget.get(PlaywrightTags.WebLocatorCSS));
         webORObject.setAttributeByName("Placeholder", playwrightWidget.get(PlaywrightTags.WebLocatorPlaceholder));
-        webORObject.setAttributeByName("Label", playwrightWidget.get(PlaywrightTags.WebLocatorLabel));
         webORObject.setAttributeByName("AltText", playwrightWidget.get(PlaywrightTags.WebLocatorAltText));
         webORObject.setAttributeByName("Title", playwrightWidget.get(PlaywrightTags.WebLocatorTitle));
         webORObject.setAttributeByName("TestId", playwrightWidget.get(PlaywrightTags.WebLocatorTestId));
 
         return webORObject;
+    }
+
+    private String evaluateLocatorWithExactFallback(Function<Boolean, Locator> locatorBuilder, String value) {
+        try {
+            Locator locator = locatorBuilder.apply(false);
+            int count = locator.count();
+            if (count == 1) return value;
+
+            // If default text or label locator matches more than 1 element
+            // Try to automatically consider an exact locator
+            if (count > 1) {
+                Locator exactLocator = locatorBuilder.apply(true);
+                int exactCount = exactLocator.count();
+                if (exactCount == 1) return value + ";exact";
+            }
+        } catch (Exception e) {
+            logger.log(Level.ERROR, "Locator evaluation failed for '{}'", value, e);
+        }
+        return value;
     }
 
     private String describeElement(PlaywrightWidget widget) {
@@ -506,7 +544,7 @@ public class MCPInterface {
         String webPageTitle = state.getPage().title();
         WebORPage webORPage = webOR.addPage(webPageTitle);
         // Add the data of the selected action-element into the OR
-        WebORObject webORObject = addActionObject(webORPage, action);
+        WebORObject webORObject = addWidgetObject(webORPage, (PlaywrightWidget) action.get(Tags.OriginWidget));
         // Create an INGenious action test step
         TestStep testStep = testCase.addNewStep();
         testStep.setReference(webORPage.getName());
