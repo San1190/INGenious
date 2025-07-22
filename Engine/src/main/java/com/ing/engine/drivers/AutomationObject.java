@@ -152,13 +152,38 @@ public class AutomationObject {
     private Locator getElementFromList(List<Locator> elements) {
         if (elements == null || elements.isEmpty()) return null;
 
+        final int MAX_RETRIES = 5;
+        final int RETRY_DELAY_MS = 1000;
+
         // Check all locators and return the first one that matches exactly one element
+        // Using a number of MAX_RETRIES
+        for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            Locator uniqueLocator = findUniqueLocator(elements);
+            if (uniqueLocator != null) {
+                return uniqueLocator;
+            }
+
+            if (attempt < MAX_RETRIES) {
+                try {
+                    Thread.sleep(RETRY_DELAY_MS);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    LogManager.getLogger().log(org.apache.logging.log4j.Level.WARN, "Retry interrupted", ie);
+                    break;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private Locator findUniqueLocator(List<Locator> elements) {
         for (Locator locator : elements) {
             try {
                 if (locator != null && locator.count() == 1) {
                     return locator;
                 } else {
-                    int count = locator != null ? locator.count() : -1;
+                    int count = (locator != null) ? locator.count() : -1;
                     String msg = "Locator did not match exactly one element (matched " + count + "): " + locator;
                     LogManager.getLogger().log(org.apache.logging.log4j.Level.WARN, msg);
                 }
