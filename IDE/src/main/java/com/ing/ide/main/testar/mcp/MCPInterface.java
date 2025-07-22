@@ -466,6 +466,7 @@ public class MCPInterface {
         // Get visual element descriptor
         String name = getFirstNonEmpty(
                 widget.get(PlaywrightTags.WebInnerText, "").trim(),
+                widget.get(PlaywrightTags.WebLocatorLabel, "").trim(),
                 widget.get(PlaywrightTags.WebName, ""),
                 widget.get(PlaywrightTags.WebId, ""),
                 widget.get(PlaywrightTags.WebAriaLabel, ""),
