@@ -18,15 +18,16 @@ public class MCPAgent {
 
 	private final String OPENAI_API_KEY = System.getenv("OPENAI_API");
 	private final String OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
-	private final String OPENAI_MODEL = "gpt-4o";
 	private final OkHttpClient client = new OkHttpClient();
 	private final ObjectMapper mapper = new ObjectMapper();
 
 	private final int maxActions;
+	private final String openaiModel;
 	private final String bddInstructions;
 	private final MCPInterface mcpInterface;
 
-	public MCPAgent(Project project, int maxActions, String bddInstructions) {
+	public MCPAgent(Project project, String openaiModel, int maxActions, String bddInstructions) {
+		this.openaiModel = openaiModel;
 		this.maxActions = maxActions;
 		this.bddInstructions = bddInstructions;
 		this.mcpInterface = new MCPInterface(project);
@@ -42,7 +43,7 @@ public class MCPAgent {
 
 		for (int step = 0; step < this.maxActions; step++) {
 			Map<String, Object> body = new HashMap<>();
-			body.put("model", OPENAI_MODEL);
+			body.put("model", openaiModel);
 			body.put("messages", messages);
 			body.put("functions", functions);
 			body.put("function_call", "auto");

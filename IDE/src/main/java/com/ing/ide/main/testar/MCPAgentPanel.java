@@ -38,6 +38,12 @@ public class MCPAgentPanel {
 
 		JPanel formPanel = new JPanel(new GridLayout(3, 2, 5, 5));
 
+		JLabel openaiLabel = new JLabel("OpenAI model:");
+		JTextField openaiTextField = new JTextField(40);
+		openaiTextField.setText("gpt-4o");
+		formPanel.add(openaiLabel);
+		formPanel.add(openaiTextField);
+
 		JLabel actionsLabel = new JLabel("Max Actions:");
 		JSpinner actionsSpinner = new JSpinner();
 		actionsSpinner.setValue(20);
@@ -67,6 +73,7 @@ public class MCPAgentPanel {
 
 		launchButton.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
+				String openaiModel = openaiTextField.getText().trim();
 				int maxActions = (Integer) actionsSpinner.getValue();
 				String bddInstructions = bddTextArea.getText();
 
@@ -75,6 +82,7 @@ public class MCPAgentPanel {
 
 				MCPAgent mcpAgent = new MCPAgent(
 						sMainFrame.getProject(),
+						openaiModel,
 						maxActions,
 						bddInstructions);
 
