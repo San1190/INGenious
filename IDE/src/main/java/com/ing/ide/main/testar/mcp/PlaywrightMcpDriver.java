@@ -31,7 +31,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class MCPInterface {
+public class PlaywrightMcpDriver implements McpInterface {
 
     private static final Logger logger = LogManager.getLogger();
 
@@ -50,7 +50,7 @@ public class MCPInterface {
     private final List<String> executedAction = new ArrayList<>();
 
     // Define selectors for clickable elements
-    public final static String[] clickableSelectors = {
+    private final static String[] clickableSelectors = {
             "a",                       // Links
             "button",                  // Buttons
             "input[type='button']",    // Input button
@@ -63,7 +63,7 @@ public class MCPInterface {
     };
 
     // Define selectors for fillable elements
-    public final static String[] fillableSelectors = {
+    private final static String[] fillableSelectors = {
             "input[type='text']",      // Text input fields
             "textarea",                // Text areas
             "input[class='input']",    // Input fields
@@ -72,11 +72,11 @@ public class MCPInterface {
     };
 
     // Define selectors for selectable elements
-    public final static String[] selectableSelectors = {
+    private final static String[] selectableSelectors = {
             "select"                   // Dropdowns
     };
 
-    public MCPInterface(Project project) {
+    public PlaywrightMcpDriver(Project project) {
         // Prepare the INGenious object repository used to store steps information
         this.project = project;
         objectRepository = new ObjectRepository(project);
@@ -89,6 +89,7 @@ public class MCPInterface {
         this.testCase = scenario.addTestCase(timestamp);
     }
 
+    @Override
     public String loadWebURL(String url){
         try {
             this.system = new PlaywrightSUT(url);
@@ -109,6 +110,7 @@ public class MCPInterface {
         return "Web URL loaded successfully!";
     }
 
+    @Override
     public String getCurrentURL() {
         if (this.page == null) return "ISSUE: No web state-page initialized";
 
@@ -118,6 +120,7 @@ public class MCPInterface {
         return url;
     }
 
+    @Override
     public String navigateBack() {
         if (this.page == null) return "ISSUE: No web state-page initialized";
 
@@ -133,6 +136,7 @@ public class MCPInterface {
         return String.format("Success navigating back to '%s'", response.url());
     }
 
+    @Override
     public String getState() {
         if (this.page == null) return "ISSUE: No web state-page initialized";
 
@@ -245,6 +249,7 @@ public class MCPInterface {
         return "";
     }
 
+    @Override
     public String executeClickAction(String bddStep, String rawCssSelector) {
         if (this.page == null) return "ISSUE: No web state-page initialized";
 
@@ -282,6 +287,7 @@ public class MCPInterface {
         }
     }
 
+    @Override
     public String executeFillAction(String bddStep, String rawCssSelector, String fillText) {
         if (this.page == null) return "ISSUE: No web state-page initialized";
 
@@ -319,6 +325,7 @@ public class MCPInterface {
         }
     }
 
+    @Override
     public String executeSelectAction(String bddStep, String rawCssSelector, String optionValue) {
         if (this.page == null) return "ISSUE: No web state-page initialized";
 
@@ -382,12 +389,14 @@ public class MCPInterface {
         executedAction.add(actionDescription);
     }
 
+    @Override
     public String checkExecutedActions() {
         if(executedAction.isEmpty()) return "No executed actions yet!";
 
         return String.join(", ", executedAction);
     }
 
+    @Override
     public String getStateImage() {
         try {
             byte[] screenshotBytes = this.page.screenshot(
@@ -400,27 +409,31 @@ public class MCPInterface {
         }
     }
 
+    @Override
     public String addFinalAssert(String bddStep, String assertText) {
         if (this.page == null) return "ISSUE: No web state-page initialized";
 
         // Verify that the LLM assertText can be used as locator for assertion
         Locator locator = page.locator("text=" + assertText);
         if (locator.count() == 0 ) {
-            return "ISSUE: The provided assert text to be used as locator does not match with any GUI web element";
+            return "ISSUE: The provided assert text to be used as locator does not match with any GUI web element. " +
+                    "Try again with a correct text locator.";
         }
         /*else if (locator.count() > 1) {
             return "ISSUE: The provided assert text locator is not unique because matches more than one GUI web element";
         }*/
         else if (!locator.first().isVisible()) {
-            return "ISSUE: The assert text locator is correct but the GUI web element is not visible";
+            return "ISSUE: The assert text locator is correct but the GUI web element is not visible. " +
+                    "Try again with a correct text locator.";
         }
 
         addAssertTestStep(testCase, assertText);
 
-        return "OK";
+        return "Assertion created successfully!";
     }
 
-    public void shutdown() {
+    @Override
+    public void stopTestExecution() {
         // At the end of the generated sequence, save the generated INGenious testCase
         this.testCase.save();
         this.scenario.save();

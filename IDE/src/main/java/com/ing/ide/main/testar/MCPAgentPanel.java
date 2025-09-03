@@ -1,7 +1,7 @@
 package com.ing.ide.main.testar;
 
 import com.ing.ide.main.mainui.AppMainFrame;
-import com.ing.ide.main.testar.mcp.MCPAgent;
+import com.ing.ide.main.testar.mcp.LlmMcpAgent;
 import com.ing.ide.settings.IconSettings;
 
 import javax.swing.*;
@@ -80,7 +80,7 @@ public class MCPAgentPanel {
 				// Save possible updated BDD text
 				defaultBDDText = bddInstructions;
 
-				MCPAgent mcpAgent = new MCPAgent(
+				LlmMcpAgent llmMcpAgent = new LlmMcpAgent(
 						sMainFrame.getProject(),
 						openaiModel,
 						maxActions,
@@ -89,7 +89,7 @@ public class MCPAgentPanel {
 				SwingWorker<String, Void> worker = new SwingWorker<String, Void>() {
 					@Override
 					protected String doInBackground() throws Exception {
-						return mcpAgent.runLLMAgent();
+						return llmMcpAgent.runLLMAgent();
 					}
 				};
 				worker.execute();
