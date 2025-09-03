@@ -8,11 +8,11 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.*;
 
-public final class McpFunctionBuilder {
+public final class McpToolBuilder {
 
     private static final Logger logger = LogManager.getLogger();
 
-    private McpFunctionBuilder() {}
+    private McpToolBuilder() {}
 
     public static List<Map<String,Object>> from(Class<?> apiInterface) {
         List<Map<String,Object>> functionsMap = new ArrayList<>();
@@ -38,17 +38,21 @@ public final class McpFunctionBuilder {
                 if (mcpParam.required()) required.add(mcpParam.name());
             }
 
-            Map<String,Object> params = Map.of(
-                    "type", "object",
-                    "properties", props,
-                    "required", required
-            );
+            Map<String,Object> params = new LinkedHashMap<>();
+            params.put("type", "object");
+            params.put("properties", props);
+            params.put("required", required);
 
-            functionsMap.add(Map.of(
-                    "name", name,
-                    "description", mcpMethod.description(),
-                    "parameters", params
-            ));
+            Map<String,Object> function = new LinkedHashMap<>();
+            function.put("name", name);
+            function.put("description", mcpMethod.description());
+            function.put("parameters", params);
+
+            Map<String,Object> tool = new LinkedHashMap<>();
+            tool.put("type", "function");
+            tool.put("function", function);
+
+            functionsMap.add(tool);
         }
         return functionsMap;
     }

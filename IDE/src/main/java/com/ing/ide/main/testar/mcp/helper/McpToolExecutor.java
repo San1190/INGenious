@@ -9,7 +9,7 @@ import org.apache.logging.log4j.Logger;
 import java.lang.reflect.*;
 import java.util.*;
 
-public final class McpFunctionExecutor<T> {
+public final class McpToolExecutor<T> {
 
     private static final Logger logger = LogManager.getLogger();
 
@@ -18,7 +18,7 @@ public final class McpFunctionExecutor<T> {
     private final Map<String, Method> byName = new HashMap<>();
     private final Map<Method, List<String>> paramOrder = new HashMap<>();
 
-    private McpFunctionExecutor(Class<T> api, T impl, ObjectMapper mapper) {
+    private McpToolExecutor(Class<T> api, T impl, ObjectMapper mapper) {
         this.impl = impl;
         this.mapper = mapper;
 
@@ -45,8 +45,8 @@ public final class McpFunctionExecutor<T> {
         }
     }
 
-    public static <T> McpFunctionExecutor<T> of(Class<T> api, T impl, ObjectMapper mapper) {
-        return new McpFunctionExecutor<>(api, impl, mapper);
+    public static <T> McpToolExecutor<T> of(Class<T> api, T impl, ObjectMapper mapper) {
+        return new McpToolExecutor<>(api, impl, mapper);
     }
 
     public Object execute(String functionName, String argumentsJson) throws Exception {

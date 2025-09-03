@@ -15,10 +15,11 @@ public class MCPAgentPanel {
 
 	private String defaultBDDText =
 			"Given the user navigates to the url 'https://para.testar.org/'\n" +
-			"When the user navigates to the contact page\n" +
-			"And the user fills the customer care form with valid data\n" +
-			"And the user submits the customer care form\n" +
-			"Then a message indicating the a representative will be contacting you appears";
+			"When the user logs in with the john/demo credentials\n" +
+			"And the user navigates to request a loan\n" +
+			"And the user fills out and applies for a big loan amount with a small down payment\n" +
+			"And the user select the account 54321\n" +
+			"Then a message indicates the loan is denied";
 
 	public MCPAgentPanel(AppMainFrame sMainFrame) {
 		this.sMainFrame = sMainFrame;
@@ -40,7 +41,7 @@ public class MCPAgentPanel {
 
 		JLabel openaiLabel = new JLabel("OpenAI model:");
 		JTextField openaiTextField = new JTextField(40);
-		openaiTextField.setText("gpt-4o");
+		openaiTextField.setText("gpt-5-mini");
 		formPanel.add(openaiLabel);
 		formPanel.add(openaiTextField);
 

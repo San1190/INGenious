@@ -2,18 +2,15 @@ package com.ing.ide.main.testar.mcp;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ing.datalib.component.Project;
-import com.ing.ide.main.testar.mcp.helper.McpFunctionBuilder;
-import com.ing.ide.main.testar.mcp.helper.McpFunctionExecutor;
+import com.ing.ide.main.testar.mcp.helper.McpToolBuilder;
+import com.ing.ide.main.testar.mcp.helper.McpToolExecutor;
 import com.ing.ide.main.testar.mcp.helper.McpNames;
 import okhttp3.*;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class LlmMcpAgent {
 
@@ -41,18 +38,17 @@ public class LlmMcpAgent {
 			throw new IllegalStateException("Missing OPENAI_API env var.");
 		}
 
-		// Prepare the messages and functions data to be sent to the LLM
-		final ObjectMapper mapper = new ObjectMapper();
+		// Prepare the messages and tools data to be sent to the LLM
 		final List<Map<String, Object>> messages  = defineMessages();
-		final List<Map<String, Object>> functions = McpFunctionBuilder.from(McpInterface.class);
-		final McpFunctionExecutor<McpInterface> executor = McpFunctionExecutor.of(McpInterface.class, mcpInterface, mapper);
+		final List<Map<String, Object>> tools = McpToolBuilder.from(McpInterface.class);
+		final McpToolExecutor<McpInterface> executor = McpToolExecutor.of(McpInterface.class, mcpInterface, mapper);
 
 		for (int step = 0; step < this.maxActions; step++) {
 			Map<String, Object> body = new HashMap<>();
 			body.put("model", openaiModel);
 			body.put("messages", messages);
-			body.put("functions", functions);
-			body.put("function_call", "auto");
+			body.put("tools", tools);
+			body.put("tool_choice", "auto");
 
 			try (Response response = client.newCall(
 					new Request.Builder()
@@ -81,70 +77,73 @@ public class LlmMcpAgent {
 					} else {
 						String failed = "Stop execution due to OpenAI call fail: " + response.code();
 						logger.log(Level.ERROR, failed);
+						logger.log(Level.ERROR, response.body().string());
 						return failed;
 					}
 				}
 
-				String json = response.body().string();
+				String json = Objects.requireNonNull(response.body()).string();
 				Map<?, ?> parsed = mapper.readValue(json, Map.class);
 				Map<?, ?> choice = ((List<Map<?, ?>>) parsed.get("choices")).get(0);
 				Map<?, ?> message = (Map<?, ?>) choice.get("message");
-				Map<?, ?> functionCall = (Map<?, ?>) message.get("function_call");
 
-				// Don't stop, give the LLM another chance
-				if (functionCall == null) {
-					String feedback = "ISSUE: No function was selected. Please review the last function results or feedback messages.";
+				messages.add((Map<String, Object>) message);
+
+				// Read all tool_calls (array)
+				List<Map<?, ?>> toolCalls = (List<Map<?, ?>>) message.get("tool_calls");
+
+				// Empty toolCalls response. Don't stop, give the LLM another chance
+				if (toolCalls == null || toolCalls.isEmpty()) {
+					String feedback = "ISSUE: No tool was selected. Please review the last results.";
 					logger.log(Level.ERROR, feedback);
-
-					Map<String, Object> functionMsg = new HashMap<>();
-					functionMsg.put("role", "function");
-					functionMsg.put("name", "undefined");
-					functionMsg.put("content", feedback);
-					messages.add(functionMsg);
-
-					Map<String, Object> userHint = new HashMap<>();
-					userHint.put("role", "user");
-					userHint.put("content", "Reminder: You must choose a valid function to proceed.");
-					messages.add(userHint);
-
+					messages.add(Map.of(
+							"role", "user",
+							"content", "Reminder: choose a valid tool to proceed."
+					));
 					continue;
 				}
 
-				String functionName = (String) functionCall.get("name");
-				logger.log(Level.ERROR, "DEBUG functionName: " + functionName);
+				// Execute all tool calls
+				for (Map<?, ?> toolCall : toolCalls) {
+					String callId = (String) toolCall.get("id");
+					Map<?, ?> function = (Map<?, ?>) toolCall.get("function");
+					String toolName = (String) function.get("name");
+					Object rawArgs = function.get("arguments");
+					String argumentsJson = (rawArgs instanceof CharSequence)
+							? rawArgs.toString()
+							: mapper.writeValueAsString(rawArgs);
 
-				String argumentsJson = (String) functionCall.get("arguments");
-				logger.log(Level.ERROR, "DEBUG argumentsJson: " + argumentsJson);
+					logger.log(Level.ERROR, "DEBUG toolName: " + toolName);
+					logger.log(Level.ERROR, "DEBUG argumentsJson: " + argumentsJson);
 
-				// Execute the functions using the generic executor
-				Object resultObj = executor.execute(functionName, argumentsJson);
-				String result = (resultObj == null) ? "null" : resultObj.toString();
+					Object resultObj = executor.execute(toolName, argumentsJson);
+					String result = (resultObj == null) ? "null" : resultObj.toString();
 
-				// Attach the state image as base64
-				if (McpNames.of(McpInterface::getStateImage).equals(functionName)) {
-					if (!result.isEmpty()) {
-						attachStateImage(messages, result);
-						result = "Screenshot attached!";
-					} else {
-						result = "ISSUE: Screenshot failed to obtain.";
+					// Check if stop the execution due to the LLM decision
+					if(McpNames.of(McpInterface::stopTestExecution).equals(toolName)){
+						logger.log(Level.ERROR, "LLM agent decided to stop the test execution");
+						return "LLM agent decided to stop the test execution";
 					}
-					logger.log(Level.ERROR, "getStateImage: " + result);
+
+					// Reply to this tool call first
+					boolean requireStateImage = McpNames.of(McpInterface::getStateImage).equals(toolName);
+					String toolContent = requireStateImage ? "screenshot_ready" : result;
+					messages.add(Map.of(
+							"role", "tool",
+							"tool_call_id", callId,
+							"content", toolContent
+					));
+
+					// If required, additionally add the image user message
+					if (requireStateImage && !result.isEmpty() && supportsVision(openaiModel)) {
+						attachStateImage(messages, result);
+					} else if (requireStateImage && !result.isEmpty()) {
+						messages.add(Map.of(
+								"role","user",
+								"content","Screenshot captured (omitted for this model)."
+						));
+					}
 				}
-
-				Map<String, Object> assistantMsg = new HashMap<>();
-				assistantMsg.put("role", "assistant");
-				assistantMsg.put("content", null);
-				Map<String, Object> funcCall = new HashMap<>();
-				funcCall.put("name", functionName);
-				funcCall.put("arguments", argumentsJson);
-				assistantMsg.put("function_call", funcCall);
-				messages.add(assistantMsg);
-
-				Map<String, Object> functionMsg = new HashMap<>();
-				functionMsg.put("role", "function");
-				functionMsg.put("name", functionName);
-				functionMsg.put("content", result != null ? result : "null");
-				messages.add(functionMsg);
 
 			} catch (Exception e) {
 				logger.log(Level.ERROR, "LLM step failed", e);
@@ -186,6 +185,11 @@ public class LlmMcpAgent {
 		);
 
 		return messages;
+	}
+
+	private boolean supportsVision(String model) {
+		String m = model == null ? "" : model.toLowerCase();
+		return m.contains("gpt-4o") || m.contains("gpt-4.1") || m.contains("gpt-5");
 	}
 
 	private static void attachStateImage(List<Map<String, Object>> messages, String base64Png) {
