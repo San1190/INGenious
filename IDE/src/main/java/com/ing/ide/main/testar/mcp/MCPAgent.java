@@ -98,6 +98,14 @@ public class MCPAgent {
 							result = mcpInterface.loadWebURL((String) arguments.get("url"));
 							logger.log(Level.ERROR, "loadWebURL: " + result);
 							break;
+						case "getCurrentURL":
+							result = mcpInterface.getCurrentURL();
+							logger.log(Level.ERROR, "getCurrentURL: " + result);
+							break;
+						case "navigateBack":
+							result = mcpInterface.navigateBack();
+							logger.log(Level.ERROR, "navigateBack: " + result);
+							break;
 						case "getState":
 							result = mcpInterface.getState();
 							logger.log(Level.ERROR, "getState: " + result);
@@ -199,9 +207,20 @@ public class MCPAgent {
 						mcpInterface.shutdown();
 						return result;
 					}
-				} else if (response.code() == 429){
-					logger.log(Level.ERROR, "OpenAI rate limited (429)... wait 10 seconds...");
-					Thread.sleep(10000L);
+				} else if (response.code() == 429) {
+					String retryAfter = response.header("Retry-After");
+					long waitTime = 10000L; // default 10 seconds
+
+					if (retryAfter != null) {
+						try {
+							waitTime = Long.parseLong(retryAfter) * 1333L; // conversion with 33% margin
+						} catch (NumberFormatException e) {
+							logger.log(Level.ERROR, "Invalid Retry-After header value: " + retryAfter);
+						}
+					}
+
+					logger.log(Level.ERROR, "OpenAI rate limited (429)... wait " + (waitTime / 1000) + " seconds...");
+					Thread.sleep(waitTime);
 				} else {
 					String failed = "Stop execution due to OpenAI call fail: " + response.code();
 					logger.log(Level.ERROR, failed);
@@ -209,7 +228,6 @@ public class MCPAgent {
 				}
 			} catch (Exception e) {
 				e.printStackTrace();
-				break;
 			}
 		}
 
@@ -226,7 +244,8 @@ public class MCPAgent {
 				"content", "You are a BDD-GUI test agent. " +
 						"Your goal is to complete the BDD instructions. " +
 						"Use loadWebURL, getState, executeClickAction, executeFillAction, and executeSelectAction functions. " +
-						"Use checkExecutedActions function if you need memory assistance. " +
+						"Use getCurrentURL and checkExecutedActions functions if you need assistance. " +
+						"Use navigateBack function if you need to control the web browser. " +
 						"When considering the BDD test is completed use the getStateImage and addFinalAssert functions.")
 		);
 
@@ -263,6 +282,24 @@ public class MCPAgent {
 								)
 						),
 						"required", List.of("url")
+				)
+		));
+
+		functions.add(Map.of(
+				"name", "getCurrentURL",
+				"description", "Get the current web url that is being tested.",
+				"parameters", Map.of(
+						"type", "object",
+						"properties", new HashMap<>()
+				)
+		));
+
+		functions.add(Map.of(
+				"name", "navigateBack",
+				"description", "Navigate to the previous web page in history.",
+				"parameters", Map.of(
+						"type", "object",
+						"properties", new HashMap<>()
 				)
 		));
 
@@ -360,7 +397,7 @@ public class MCPAgent {
 
 		functions.add(Map.of(
 				"name", "addFinalAssert",
-				"description", "Add a text assert as final step in the BDD test execution.",
+				"description", "Add a unique text assert as final step in the BDD test execution.",
 				"parameters", Map.of(
 						"type", "object",
 						"properties", Map.of(
@@ -370,7 +407,7 @@ public class MCPAgent {
 								),
 								"assertText", Map.of(
 										"type", "string",
-										"assertText", "A visible text that can be used as text locator assert."
+										"assertText", "A visible unique text that can be used as text locator assert."
 								)
 						),
 						"required", List.of("bddStep", "assertText")

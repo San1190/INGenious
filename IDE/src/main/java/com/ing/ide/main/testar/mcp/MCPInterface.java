@@ -16,10 +16,7 @@ import com.ing.ide.main.testar.playwright.system.PlaywrightSUT;
 import com.ing.ide.main.testar.playwright.system.PlaywrightState;
 import com.ing.ide.main.testar.playwright.system.PlaywrightTags;
 import com.ing.ide.main.testar.playwright.system.PlaywrightWidget;
-import com.microsoft.playwright.ElementHandle;
-import com.microsoft.playwright.Locator;
-import com.microsoft.playwright.Page;
-import com.microsoft.playwright.PlaywrightException;
+import com.microsoft.playwright.*;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -102,6 +99,7 @@ public class MCPInterface {
             return "ISSUE loading the Web URL: " + e.getMessage();
         }
 
+        // Add browser control test step into INGenious
         TestStep initialTestStep = testCase.addNewStep();
         initialTestStep.setObject("Browser");
         initialTestStep.setDescription("Open the Url [<Data>] in the Browser");
@@ -109,6 +107,30 @@ public class MCPInterface {
         initialTestStep.setInput("@".concat(url));
 
         return "Web URL loaded successfully!";
+    }
+
+    public String getCurrentURL() {
+        if (this.page == null) return "ISSUE: No web state-page initialized";
+
+        String url = this.page.url();
+        if (url == null || url.isEmpty()) return "ISSUE: No web url available.";
+
+        return url;
+    }
+
+    public String navigateBack() {
+        if (this.page == null) return "ISSUE: No web state-page initialized";
+
+        Response response = this.page.goBack();
+        if (response == null) return "ISSUE: Cannot navigate back - no previous page.";
+
+        // Add browser control test step into INGenious
+        TestStep goBackTestStep = testCase.addNewStep();
+        goBackTestStep.setObject("Browser");
+        goBackTestStep.setDescription("Navigate to the previous page in history");
+        goBackTestStep.setAction("GoBack");
+
+        return String.format("Success navigating back to '%s'", response.url());
     }
 
     public String getState() {
@@ -384,9 +406,13 @@ public class MCPInterface {
         // Verify that the LLM assertText can be used as locator for assertion
         Locator locator = page.locator("text=" + assertText);
         if (locator.count() == 0 ) {
-            return "ISSUE: The provided text does not match with any GUI web element";
-        } else if (!locator.first().isVisible()) {
-            return "ISSUE: The assert text is correct but the GUI web element is not visible";
+            return "ISSUE: The provided assert text to be used as locator does not match with any GUI web element";
+        }
+        /*else if (locator.count() > 1) {
+            return "ISSUE: The provided assert text locator is not unique because matches more than one GUI web element";
+        }*/
+        else if (!locator.first().isVisible()) {
+            return "ISSUE: The assert text locator is correct but the GUI web element is not visible";
         }
 
         addAssertTestStep(testCase, assertText);
@@ -573,7 +599,8 @@ public class MCPInterface {
         WebORPage webORPage = webOR.addPage(webPageTitle);
 
         // Add the element to the OR
-        String elementDescription = "assert[text]";
+        String trimmedText = assertText.length() > 10 ? assertText.substring(0, 10) : assertText;
+        String elementDescription = "assert" + trimmedText + "[text]";
         ObjectGroup objectGroup = webORPage.addObjectGroup(elementDescription);
         WebORObject webORObject = (WebORObject) objectGroup.addObject(elementDescription);
         webORObject.setAttributeByName("Text", assertText);
