@@ -108,10 +108,7 @@ public class LlmMcpAgent {
 					String callId = (String) toolCall.get("id");
 					Map<?, ?> function = (Map<?, ?>) toolCall.get("function");
 					String toolName = (String) function.get("name");
-					Object rawArgs = function.get("arguments");
-					String argumentsJson = (rawArgs instanceof CharSequence)
-							? rawArgs.toString()
-							: mapper.writeValueAsString(rawArgs);
+					String argumentsJson = (String) function.get("arguments");
 
 					logger.log(Level.ERROR, "DEBUG toolName: " + toolName);
 					logger.log(Level.ERROR, "DEBUG argumentsJson: " + argumentsJson);
@@ -142,6 +139,9 @@ public class LlmMcpAgent {
 								"role","user",
 								"content","Screenshot captured (omitted for this model)."
 						));
+					} else {
+						// This is only for debugging purposes
+						logger.log(Level.ERROR, "DEBUG result: " + result);
 					}
 				}
 
@@ -166,7 +166,8 @@ public class LlmMcpAgent {
 						"Use loadWebURL, getState, executeClickAction, executeFillAction, and executeSelectAction functions. " +
 						"Use getCurrentURL and checkExecutedActions functions if you need assistance. " +
 						"Use navigateBack function if you need to control the web browser. " +
-						"When considering the BDD test is completed use the getStateImage and addFinalAssert functions.")
+						"After completing each BDD step (Given, When, Then), use getStateImage and addStepAssert functions to validate that step. " +
+						"When asserting all BDD instructions, use the stopTestExecution function.")
 		);
 
 		messages.add(Map.of(

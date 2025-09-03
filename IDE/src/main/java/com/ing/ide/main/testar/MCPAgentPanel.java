@@ -41,13 +41,13 @@ public class MCPAgentPanel {
 
 		JLabel openaiLabel = new JLabel("OpenAI model:");
 		JTextField openaiTextField = new JTextField(40);
-		openaiTextField.setText("gpt-5-mini");
+		openaiTextField.setText("gpt-4.1-mini");
 		formPanel.add(openaiLabel);
 		formPanel.add(openaiTextField);
 
 		JLabel actionsLabel = new JLabel("Max Actions:");
 		JSpinner actionsSpinner = new JSpinner();
-		actionsSpinner.setValue(20);
+		actionsSpinner.setValue(50);
 		formPanel.add(actionsLabel);
 		formPanel.add(actionsSpinner);
 

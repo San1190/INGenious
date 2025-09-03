@@ -43,8 +43,8 @@ public interface McpInterface {
     @McpMethod(description = "Get an image of the current GUI state.")
     String getStateImage();
 
-    @McpMethod(description = "Add a unique text assert as final step in the BDD test execution.")
-    String addFinalAssert(
+    @McpMethod(description = "Add a unique text that can be used to assert a BDD step.")
+    String addStepAssert(
             @McpParam(name = "bddStep", description = "The BDD step text associated with this action.") String bddStep,
             @McpParam(name = "assertText", description = "A visible unique text that can be used as text locator assert.") String assertText
     );

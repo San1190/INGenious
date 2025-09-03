@@ -410,7 +410,7 @@ public class PlaywrightMcpDriver implements McpInterface {
     }
 
     @Override
-    public String addFinalAssert(String bddStep, String assertText) {
+    public String addStepAssert(String bddStep, String assertText) {
         if (this.page == null) return "ISSUE: No web state-page initialized";
 
         // Verify that the LLM assertText can be used as locator for assertion
@@ -419,15 +419,17 @@ public class PlaywrightMcpDriver implements McpInterface {
             return "ISSUE: The provided assert text to be used as locator does not match with any GUI web element. " +
                     "Try again with a correct text locator.";
         }
-        /*else if (locator.count() > 1) {
+        else if (locator.count() > 1) {
             return "ISSUE: The provided assert text locator is not unique because matches more than one GUI web element";
-        }*/
+        }
         else if (!locator.first().isVisible()) {
             return "ISSUE: The assert text locator is correct but the GUI web element is not visible. " +
                     "Try again with a correct text locator.";
         }
 
+        // Save the execution steps when we have valid asserts for the BDD instructions
         addAssertTestStep(testCase, assertText);
+        saveExecutionSteps();
 
         return "Assertion created successfully!";
     }
@@ -435,12 +437,16 @@ public class PlaywrightMcpDriver implements McpInterface {
     @Override
     public void stopTestExecution() {
         // At the end of the generated sequence, save the generated INGenious testCase
+        saveExecutionSteps();
+        // Then, close the playwright session
+        this.system.stop();
+    }
+
+    private void saveExecutionSteps(){
         this.testCase.save();
         this.scenario.save();
         this.objectRepository.save();
         this.project.save();
-        // Then, close the playwright session
-        this.system.stop();
     }
 
     /** Add the action-element info into INGenious */
