@@ -1,14 +1,7 @@
 package com.ing.ide.main.testar.mcp;
 
 import com.ing.datalib.component.Project;
-import com.ing.datalib.component.Scenario;
-import com.ing.datalib.component.TestCase;
-import com.ing.datalib.component.TestStep;
-import com.ing.datalib.or.ObjectRepository;
-import com.ing.datalib.or.common.ObjectGroup;
-import com.ing.datalib.or.web.WebOR;
-import com.ing.datalib.or.web.WebORObject;
-import com.ing.datalib.or.web.WebORPage;
+import com.ing.ide.main.testar.TESTARDataWriter;
 import com.ing.ide.main.testar.playwright.actions.PlaywrightClick;
 import com.ing.ide.main.testar.playwright.actions.PlaywrightFill;
 import com.ing.ide.main.testar.playwright.actions.PlaywrightSelect;
@@ -20,14 +13,10 @@ import com.microsoft.playwright.*;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.testar.monkey.alayer.Action;
-import org.testar.monkey.alayer.Tags;
 
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.text.SimpleDateFormat;
 import java.util.*;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -35,16 +24,10 @@ public class PlaywrightMcpDriver implements McpInterface {
 
     private static final Logger logger = LogManager.getLogger();
 
-    private final Project project;
-    private final ObjectRepository objectRepository;
-    private final WebOR webOR;
-    private final Scenario scenario;
-    private final TestCase testCase;
+    private final TESTARDataWriter dataWriter;
 
     private PlaywrightSUT system;
     private Page page;
-
-    private List<ElementHandle> stateElements = new ArrayList<>();
     private PlaywrightState state;
 
     private final List<String> executedAction = new ArrayList<>();
@@ -77,16 +60,8 @@ public class PlaywrightMcpDriver implements McpInterface {
     };
 
     public PlaywrightMcpDriver(Project project) {
-        // Prepare the INGenious object repository used to store steps information
-        this.project = project;
-        objectRepository = new ObjectRepository(project);
-        webOR = objectRepository.getWebOR();
-        webOR.setObjectRepository(objectRepository);
-
-        // Prepare an INGenious TestCase
-        this.scenario = new Scenario(project, "MCP_Generated");
-        String timestamp = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date());
-        this.testCase = scenario.addTestCase(timestamp);
+        // Initialize the data writer for saving OR objects and steps
+        this.dataWriter = new TESTARDataWriter(project);
     }
 
     @Override
@@ -101,11 +76,12 @@ public class PlaywrightMcpDriver implements McpInterface {
         }
 
         // Add browser control test step into INGenious
-        TestStep initialTestStep = testCase.addNewStep();
-        initialTestStep.setObject("Browser");
-        initialTestStep.setDescription("Open the Url [<Data>] in the Browser");
-        initialTestStep.setAction("Open");
-        initialTestStep.setInput("@".concat(url));
+        dataWriter.addTestStep(
+                "Browser",
+                "Open the Url [<Data>] in the Browser",
+                "Open",
+                "@".concat(url)
+        );
 
         return "Web URL loaded successfully!";
     }
@@ -128,10 +104,12 @@ public class PlaywrightMcpDriver implements McpInterface {
         if (response == null) return "ISSUE: Cannot navigate back - no previous page.";
 
         // Add browser control test step into INGenious
-        TestStep goBackTestStep = testCase.addNewStep();
-        goBackTestStep.setObject("Browser");
-        goBackTestStep.setDescription("Navigate to the previous page in history");
-        goBackTestStep.setAction("GoBack");
+        dataWriter.addTestStep(
+                "Browser",
+                "Navigate to the previous page in history",
+                "GoBack",
+                ""
+        );
 
         return String.format("Success navigating back to '%s'", response.url());
     }
@@ -150,7 +128,7 @@ public class PlaywrightMcpDriver implements McpInterface {
                     Arrays.stream(fillableSelectors),
                     Arrays.stream(selectableSelectors)
             ).flatMap(s -> s).toArray(String[]::new));
-            stateElements = state.getPage().querySelectorAll(interactiveWidgetsSelector);
+            List<ElementHandle> stateElements = state.getPage().querySelectorAll(interactiveWidgetsSelector);
 
             for (ElementHandle elementHandle : stateElements) {
                 PlaywrightWidget widget = new PlaywrightWidget(state, state, elementHandle);
@@ -194,10 +172,8 @@ public class PlaywrightMcpDriver implements McpInterface {
                     );
 
                     // Save them in the INGenious object repository
-                    String webPageTitle = state.getPage().title();
-                    WebORPage webORPage = webOR.addPage(webPageTitle);
                     try {
-                        addWidgetObject(webORPage, widget);
+                        dataWriter.addWidgetObject(widget, page);
                     } catch (Exception e) {
                         logger.log(Level.ERROR, "Failed add action objects to the OR" + e.getMessage());
                     }
@@ -274,7 +250,7 @@ public class PlaywrightMcpDriver implements McpInterface {
 
             PlaywrightWidget widget = new PlaywrightWidget(state, state, elementHandle);
             PlaywrightClick clickAction = new PlaywrightClick(widget);
-            addActionTestStep(testCase, state, clickAction);
+            dataWriter.addActionTestStep(state, clickAction, page);
 
             clickAction.run(system, state, 0);
 
@@ -312,7 +288,7 @@ public class PlaywrightMcpDriver implements McpInterface {
 
             PlaywrightWidget widget = new PlaywrightWidget(state, state, elementHandle);
             PlaywrightFill fillAction = new PlaywrightFill(widget, fillText);
-            addActionTestStep(testCase, state, fillAction);
+            dataWriter.addActionTestStep(state, fillAction, page);
 
             fillAction.run(system, state, 0);
 
@@ -350,7 +326,7 @@ public class PlaywrightMcpDriver implements McpInterface {
 
             PlaywrightWidget widget = new PlaywrightWidget(state, state, elementHandle);
             PlaywrightSelect selectAction = new PlaywrightSelect(widget, optionValue);
-            addActionTestStep(testCase, state, selectAction);
+            dataWriter.addActionTestStep(state, selectAction, page);
 
             selectAction.run(system, state, 0);
 
@@ -428,8 +404,8 @@ public class PlaywrightMcpDriver implements McpInterface {
         }
 
         // Save the execution steps when we have valid asserts for the BDD instructions
-        addAssertTestStep(testCase, assertText);
-        saveExecutionSteps();
+        dataWriter.addAssertTestStep(state, assertText);
+        dataWriter.saveExecutionSteps();
 
         return "Assertion created successfully!";
     }
@@ -437,198 +413,9 @@ public class PlaywrightMcpDriver implements McpInterface {
     @Override
     public void stopTestExecution() {
         // At the end of the generated sequence, save the generated INGenious testCase
-        saveExecutionSteps();
+        dataWriter.saveExecutionSteps();
         // Then, close the playwright session
         this.system.stop();
     }
 
-    private void saveExecutionSteps(){
-        this.testCase.save();
-        this.scenario.save();
-        this.objectRepository.save();
-        this.project.save();
-    }
-
-    /** Add the action-element info into INGenious */
-    private WebORObject addWidgetObject(WebORPage webORPage, PlaywrightWidget playwrightWidget) {
-        String elementDescription = describeElement(playwrightWidget);
-        ObjectGroup objectGroup = webORPage.addObjectGroup(elementDescription);
-        WebORObject webORObject = (WebORObject) objectGroup.addObject(elementDescription);
-
-        String text = playwrightWidget.get(PlaywrightTags.WebLocatorText);
-        if (text != null && !text.isEmpty()) {
-            String evaluatedText = evaluateLocatorWithExactFallback(
-                    exact -> {
-                        Page.GetByTextOptions opts = new Page.GetByTextOptions().setExact(exact);
-                        return page.getByText(text, opts);
-                    }, text
-            );
-            webORObject.setAttributeByName("Text", evaluatedText);
-        }
-
-        String label = playwrightWidget.get(PlaywrightTags.WebLocatorLabel);
-        if (label != null && !label.isEmpty()) {
-            String evaluatedLabel = evaluateLocatorWithExactFallback(
-                    exact -> {
-                        Page.GetByLabelOptions opts = new Page.GetByLabelOptions().setExact(exact);
-                        return page.getByLabel(label, opts);
-                    }, label
-            );
-            webORObject.setAttributeByName("Label", evaluatedLabel);
-        }
-
-        webORObject.setAttributeByName("Role", playwrightWidget.get(PlaywrightTags.WebLocatorRole));
-        webORObject.setXpath(playwrightWidget.get(PlaywrightTags.WebLocatorXPath));
-        webORObject.setCss(playwrightWidget.get(PlaywrightTags.WebLocatorCSS));
-        webORObject.setAttributeByName("Placeholder", playwrightWidget.get(PlaywrightTags.WebLocatorPlaceholder));
-        webORObject.setAttributeByName("AltText", playwrightWidget.get(PlaywrightTags.WebLocatorAltText));
-        webORObject.setAttributeByName("Title", playwrightWidget.get(PlaywrightTags.WebLocatorTitle));
-        webORObject.setAttributeByName("TestId", playwrightWidget.get(PlaywrightTags.WebLocatorTestId));
-
-        return webORObject;
-    }
-
-    private String evaluateLocatorWithExactFallback(Function<Boolean, Locator> locatorBuilder, String value) {
-        try {
-            Locator locator = locatorBuilder.apply(false);
-            int count = locator.count();
-            if (count == 1) return value;
-
-            // If default text or label locator matches more than 1 element
-            // Try to automatically consider an exact locator
-            if (count > 1) {
-                Locator exactLocator = locatorBuilder.apply(true);
-                int exactCount = exactLocator.count();
-                if (exactCount == 1) return value + ";exact";
-            }
-        } catch (Exception e) {
-            logger.log(Level.ERROR, "Locator evaluation failed for '{}'", value, e);
-        }
-        return value;
-    }
-
-    private String describeElement(PlaywrightWidget widget) {
-        // Get visual element descriptor
-        String name = getFirstNonEmpty(
-                widget.get(PlaywrightTags.WebInnerText, "").trim(),
-                widget.get(PlaywrightTags.WebLocatorLabel, "").trim(),
-                widget.get(PlaywrightTags.WebName, ""),
-                widget.get(PlaywrightTags.WebId, ""),
-                widget.get(PlaywrightTags.WebAriaLabel, ""),
-                widget.get(PlaywrightTags.WebPlaceholder, ""),
-                widget.get(PlaywrightTags.WebValue, "")
-        );
-        String descriptor = name.replaceAll("\\s+", "");
-        if (descriptor.isEmpty()) descriptor = "unnamed";
-
-        // Get type of the element
-        String tag = widget.get(PlaywrightTags.WebTagName, "");
-        String type = widget.get(PlaywrightTags.WebType, "");
-        String label;
-        switch (tag) {
-            case "button":
-                label = "[button]";
-                break;
-            case "a":
-                label = "[link]";
-                break;
-            case "input":
-                if ("submit".equalsIgnoreCase(type) || "button".equalsIgnoreCase(type)) {
-                    label = "[input-button]";
-                } else {
-                    label = "[input]";
-                }
-                break;
-            case "select":
-                // Handle <select> elements
-                ElementHandle selectedOption = widget.getElementHandle().querySelector("option[selected]");
-                if (selectedOption == null) {
-                    selectedOption = widget.getElementHandle().querySelector("option");
-                }
-                String selectedText = selectedOption != null ? selectedOption.innerText().trim() : "";
-                String selectDescriptor = getFirstNonEmpty(
-                        widget.get(PlaywrightTags.WebName, ""),
-                        widget.get(PlaywrightTags.WebId, ""),
-                        selectedText
-                );
-                descriptor = selectDescriptor.replaceAll("\\s+", "");
-                if (descriptor.isEmpty()) descriptor = "unnamed";
-                label = "[select]";
-                break;
-            case "textarea":
-                label = "[textarea]";
-                break;
-            case "label":
-                label = "[label]";
-                break;
-            case "img":
-                label = "[image]";
-                break;
-            case "svg":
-                label = "[icon]";
-                break;
-            default:
-                label = "[" + tag + "]";
-                break;
-        }
-
-        return descriptor + label;
-    }
-
-    private String getFirstNonEmpty(String... values) {
-        for (String val : values) {
-            if (val != null && !val.trim().isEmpty()) {
-                return val.trim();
-            }
-        }
-        return "";
-    }
-
-    /** Add the TestStep into INGenious */
-    private void addActionTestStep(TestCase testCase, PlaywrightState state, Action action) {
-        // Add the state-page to the OR
-        String webPageTitle = state.getPage().title();
-        WebORPage webORPage = webOR.addPage(webPageTitle);
-        // Add the data of the selected action-element into the OR
-        WebORObject webORObject = addWidgetObject(webORPage, (PlaywrightWidget) action.get(Tags.OriginWidget));
-        // Create an INGenious action test step
-        TestStep testStep = testCase.addNewStep();
-        testStep.setReference(webORPage.getName());
-        testStep.setObject(webORObject.getName());
-        if(action instanceof PlaywrightClick) {
-            testStep.setAction("Click");
-            testStep.setDescription("Click the [<Object>]");
-        }
-        else if(action instanceof PlaywrightFill) {
-            testStep.setAction("Fill");
-            testStep.setInput("@" + ((PlaywrightFill)action).getTypedText());
-            testStep.setDescription("Enter the value [<Data>] in the Field [<Object>]");
-        }
-        else if(action instanceof PlaywrightSelect) {
-            testStep.setAction("SelectSingleByText");
-            testStep.setInput("@" + ((PlaywrightSelect)action).getOptionValue());
-            testStep.setDescription("Select item in [<Object>] which has text: [<Data>]");
-        }
-        else testStep.setAction("Unknown");
-    }
-
-    private void addAssertTestStep(TestCase testCase, String assertText) {
-        // Add the state-page to the OR
-        String webPageTitle = state.getPage().title();
-        WebORPage webORPage = webOR.addPage(webPageTitle);
-
-        // Add the element to the OR
-        String trimmedText = assertText.length() > 10 ? assertText.substring(0, 10) : assertText;
-        String elementDescription = "assert" + trimmedText + "[text]";
-        ObjectGroup objectGroup = webORPage.addObjectGroup(elementDescription);
-        WebORObject webORObject = (WebORObject) objectGroup.addObject(elementDescription);
-        webORObject.setAttributeByName("Text", assertText);
-
-        // Create an INGenious action test step
-        TestStep testStep = testCase.addNewStep();
-        testStep.setReference(webORPage.getName());
-        testStep.setObject(webORObject.getName());
-        testStep.setAction("assertElementIsVisible");
-        testStep.setDescription("Assert if [<Object>] is visible");
-    }
 }
