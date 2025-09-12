@@ -2,13 +2,25 @@ package com.ing.ide.main.testar.mcp.helper;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ing.ide.main.testar.mcp.McpInterface;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.lang.reflect.*;
-import java.util.*;
+import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
+/**
+ * Reflection-based executor that dispatches MCP tool calls to a concrete implementation.
+ * <p>
+ * This component scans the annotated {@link McpInterface} for methods marked with {@link McpMethod},
+ * indexes them by their exposed tool name (annotation {@code name} or Java method name),
+ * records parameter order and JSON field names from {@link McpParam}, and at runtime invokes the matching method.
+ */
 public final class McpToolExecutor<T> {
 
     private static final Logger logger = LogManager.getLogger();

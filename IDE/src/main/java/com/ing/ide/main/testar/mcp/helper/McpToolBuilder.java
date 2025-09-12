@@ -1,5 +1,6 @@
 package com.ing.ide.main.testar.mcp.helper;
 
+import com.ing.ide.main.testar.mcp.McpInterface;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -8,6 +9,13 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.*;
 
+/**
+ * Builds OpenAI Chat Completions "tools" definitions from the annotated {@link McpInterface} using reflection.
+ * <p>
+ * This utility scans the given API interface for methods annotated with {@link McpMethod}
+ * and parameters annotated with {@link McpParam}, and produces a List of Maps
+ * ready to serialize as the request body’s {@code "tools"} array.
+ */
 public final class McpToolBuilder {
 
     private static final Logger logger = LogManager.getLogger();

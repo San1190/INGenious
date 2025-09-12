@@ -2,7 +2,22 @@ package com.ing.ide.main.testar.mcp;
 
 import com.ing.ide.main.testar.mcp.helper.McpMethod;
 import com.ing.ide.main.testar.mcp.helper.McpParam;
+import com.ing.ide.main.testar.mcp.helper.McpToolBuilder;
+import com.ing.ide.main.testar.mcp.helper.McpToolExecutor;
 
+/**
+ * Contract for all MCP tools exposed to the LLM agent.
+ * <p>
+ * Methods annotated with {@link McpMethod} becomes a callable "tool" in the Chat Completions API.
+ * The {@link McpToolBuilder} reflects this interface to produce the tool definitions (name, description, JSON schema).
+ * The {@link McpToolExecutor} dispatches tool calls to the implementing driver (e.g., {@link PlaywrightMcpDriver}).
+ * <p>
+ * Rules:
+ * - Annotate each method with {@link McpMethod} to be visible to the agent.
+ * - Annotate each parameter with {@link McpParam} to define its JSON name, description, and whether it is required.
+ * - Write clear, action-oriented descriptions; the agent relies on them for intent and argument selection.
+ * - Return values should be concise, serializable strings.
+ */
 public interface McpInterface {
 
     @McpMethod(description = "Load the web URL to be tested.")
