@@ -1,14 +1,12 @@
 package com.ing.ide.main.testar;
 
-import com.ing.datalib.component.Project;
-import com.ing.datalib.component.Scenario;
-import com.ing.datalib.component.TestCase;
-import com.ing.datalib.component.TestStep;
+import com.ing.datalib.component.*;
 import com.ing.datalib.or.ObjectRepository;
 import com.ing.datalib.or.common.ObjectGroup;
 import com.ing.datalib.or.web.WebOR;
 import com.ing.datalib.or.web.WebORObject;
 import com.ing.datalib.or.web.WebORPage;
+import com.ing.ide.main.mainui.components.testdesign.tree.model.ReusableTreeModel;
 import com.ing.ide.main.testar.playwright.actions.PlaywrightClick;
 import com.ing.ide.main.testar.playwright.actions.PlaywrightFill;
 import com.ing.ide.main.testar.playwright.actions.PlaywrightSelect;
@@ -26,6 +24,7 @@ import org.testar.monkey.alayer.Tags;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.List;
 import java.util.function.Function;
 
 public class TESTARDataWriter {
@@ -36,19 +35,30 @@ public class TESTARDataWriter {
     private final ObjectRepository objectRepository;
     private final WebOR webOR;
     private final Scenario scenario;
-    private final TestCase testCase;
+    private final TestCase mainTestCase;
+
+    private final Project reusableProject;
+    private final Scenario reusableScenario;
 
     public TESTARDataWriter(Project project) {
-        // Prepare the INGenious object repository used to store steps information
+        // Prepare the INGenious Object Repository used to store steps information
+        // This OR is common to all scenarios and test cases
         this.project = project;
         objectRepository = new ObjectRepository(project);
         webOR = objectRepository.getWebOR();
         webOR.setObjectRepository(objectRepository);
 
-        // Prepare an INGenious TestCase
-        this.scenario = new Scenario(project, "MCP_Generated");
+        // Prepare an INGenious Scenario in the Test Plan
+        this.scenario = new Scenario(this.project, "MCP_Generated");
+        // Prepare an INGenious TestCase in the created scenario of the Test Plan
         String timestamp = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date());
-        this.testCase = scenario.addTestCase(timestamp);
+        this.mainTestCase = scenario.addTestCase(timestamp);
+
+        // Prepare an INGenious reusable project
+        this.reusableProject = new Project(project.getLocation());
+        this.reusableProject.setName("BDD mapping");
+        // Prepare an INGenious Scenario to be a reusable component
+        this.reusableScenario = new Scenario(this.reusableProject, "StepsDefinition");
     }
 
     /** Add the action-element info into INGenious */
@@ -188,43 +198,101 @@ public class TESTARDataWriter {
         return "";
     }
 
-    public void addTestStep(String object, String description, String action, String input) {
-        TestStep testStep = testCase.addNewStep();
-        testStep.setObject(object);
-        testStep.setDescription(description);
-        testStep.setAction(action);
-        testStep.setInput(input);
+    public void addAbstractTestStep(
+            String bddStep,
+            String object,
+            String description,
+            String testAction,
+            String input,
+            String reference
+    ) {
+        String bddStepParsed = bddStep.replaceAll("[\\\\/?:*\"|><]", "_");
+        String bddAction = "StepsDefinition:".concat(bddStepParsed);
+
+        // First, create the abstract test step in the main test case of the test plan
+        // Only if it does not already exist
+        boolean exists = mainTestCase.getTestSteps()
+                .stream()
+                .anyMatch(testStep -> bddAction.equals(testStep.getAction()));
+        if(!exists) {
+            TestStep abstractTestStep = mainTestCase.addNewStep();
+            abstractTestStep.setObject("Execute");
+            abstractTestStep.setDescription(bddStep);
+            abstractTestStep.setAction(bddAction);
+        }
+
+        // Second, create a test case in the reusable scenario
+        // Only if it does not already exist
+        TestCase reusableTestCase = reusableScenario.getTestCaseByName(bddStepParsed);
+        if(reusableTestCase == null) {
+            reusableTestCase = reusableScenario.addTestCase(bddStepParsed);
+        }
+        TestStep concreteTestStep = reusableTestCase.addNewStep();
+        concreteTestStep.setObject(object);
+        concreteTestStep.setDescription(description);
+        concreteTestStep.setAction(testAction);
+        concreteTestStep.setInput(input);
+        concreteTestStep.setReference(reference);
+        reusableTestCase.save(); // TODO: This is maybe not needed
+    }
+
+    public void addConcreteTestStep(
+            String object,
+            String description,
+            String testAction,
+            String input,
+            String reference
+    ) {
+        TestStep concreteTestStep = mainTestCase.addNewStep();
+        concreteTestStep.setObject(object);
+        concreteTestStep.setDescription(description);
+        concreteTestStep.setAction(testAction);
+        concreteTestStep.setInput(input);
+        concreteTestStep.setReference(reference);
     }
 
     /** Add the TestStep into INGenious */
-    public void addActionTestStep(PlaywrightState state, Action action, Page page) {
+    public void addActionTestStep(String bddStep, PlaywrightState state, Action action, Page page) {
         // Add the state-page to the OR
         String webPageTitle = state.getPage().title();
         WebORPage webORPage = webOR.addPage(webPageTitle);
         // Add the data of the selected action-element into the OR
         WebORObject webORObject = addWidgetObject((PlaywrightWidget) action.get(Tags.OriginWidget), page);
+
         // Create an INGenious action test step
-        TestStep testStep = testCase.addNewStep();
-        testStep.setReference(webORPage.getName());
-        testStep.setObject(webORObject.getName());
+        String object = webORObject.getName();
+        String description = "";
+        String testAction = "";
+        String input = "";
+        String reference = webORPage.getName();
+
         if(action instanceof PlaywrightClick) {
-            testStep.setAction("Click");
-            testStep.setDescription("Click the [<Object>]");
+            description = "Click the [<Object>]";
+            testAction = "Click";
         }
         else if(action instanceof PlaywrightFill) {
-            testStep.setAction("Fill");
-            testStep.setInput("@" + ((PlaywrightFill)action).getTypedText());
-            testStep.setDescription("Enter the value [<Data>] in the Field [<Object>]");
+            description = "Enter the value [<Data>] in the Field [<Object>]";
+            testAction = "Fill";
+            input = "@" + ((PlaywrightFill)action).getTypedText();
         }
         else if(action instanceof PlaywrightSelect) {
-            testStep.setAction("SelectSingleByText");
-            testStep.setInput("@" + ((PlaywrightSelect)action).getOptionValue());
-            testStep.setDescription("Select item in [<Object>] which has text: [<Data>]");
+            description = "Select item in [<Object>] which has text: [<Data>]";
+            testAction = "SelectSingleByText";
+            input = "@" + ((PlaywrightSelect)action).getOptionValue();
         }
-        else testStep.setAction("Unknown");
+        else testAction = "Unknown";
+
+        addAbstractTestStep(
+                bddStep,
+                object,
+                description,
+                testAction,
+                input,
+                reference
+        );
     }
 
-    public void addAssertTestStep(PlaywrightState state, String assertText) {
+    public void addAssertTestStep(String bddStep, PlaywrightState state, String assertText) {
         // Add the state-page to the OR
         String webPageTitle = state.getPage().title();
         WebORPage webORPage = webOR.addPage(webPageTitle);
@@ -237,17 +305,34 @@ public class TESTARDataWriter {
         webORObject.setAttributeByName("Text", assertText);
 
         // Create an INGenious action test step
-        TestStep testStep = testCase.addNewStep();
-        testStep.setReference(webORPage.getName());
-        testStep.setObject(webORObject.getName());
-        testStep.setAction("assertElementIsVisible");
-        testStep.setDescription("Assert if [<Object>] is visible");
+        String object = webORObject.getName();
+        String description = "Assert if [<Object>] is visible";
+        String testAction = "assertElementIsVisible";
+        String input = "";
+        String reference = webORPage.getName();
+
+        addAbstractTestStep(
+                bddStep,
+                object,
+                description,
+                testAction,
+                input,
+                reference
+        );
     }
 
-    public void saveExecutionSteps(){
-        this.testCase.save();
+    public void saveExecutionSteps() {
+        this.mainTestCase.save();
         this.scenario.save();
         this.objectRepository.save();
         this.project.save();
+
+        this.reusableScenario.save();
+        this.reusableProject.save();
+        // TODO: Check how to save this as reusable component
+        //ReusableTreeModel reusableTreeModel = new ReusableTreeModel();
+        //reusableTreeModel.setProject(this.reusableProject);
+        //reusableTreeModel.save();
     }
+
 }

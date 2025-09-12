@@ -65,7 +65,7 @@ public class PlaywrightMcpDriver implements McpInterface {
     }
 
     @Override
-    public String loadWebURL(String url){
+    public String loadWebURL(String bddStep, String url){
         try {
             this.system = new PlaywrightSUT(url);
             this.page = this.system.getPage();
@@ -76,11 +76,13 @@ public class PlaywrightMcpDriver implements McpInterface {
         }
 
         // Add browser control test step into INGenious
-        dataWriter.addTestStep(
+        dataWriter.addAbstractTestStep(
+                bddStep,
                 "Browser",
                 "Open the Url [<Data>] in the Browser",
                 "Open",
-                "@".concat(url)
+                "@".concat(url),
+                ""
         );
 
         return "Web URL loaded successfully!";
@@ -104,10 +106,11 @@ public class PlaywrightMcpDriver implements McpInterface {
         if (response == null) return "ISSUE: Cannot navigate back - no previous page.";
 
         // Add browser control test step into INGenious
-        dataWriter.addTestStep(
+        dataWriter.addConcreteTestStep(
                 "Browser",
                 "Navigate to the previous page in history",
                 "GoBack",
+                "",
                 ""
         );
 
@@ -250,7 +253,7 @@ public class PlaywrightMcpDriver implements McpInterface {
 
             PlaywrightWidget widget = new PlaywrightWidget(state, state, elementHandle);
             PlaywrightClick clickAction = new PlaywrightClick(widget);
-            dataWriter.addActionTestStep(state, clickAction, page);
+            dataWriter.addActionTestStep(bddStep, state, clickAction, page);
 
             clickAction.run(system, state, 0);
 
@@ -288,7 +291,7 @@ public class PlaywrightMcpDriver implements McpInterface {
 
             PlaywrightWidget widget = new PlaywrightWidget(state, state, elementHandle);
             PlaywrightFill fillAction = new PlaywrightFill(widget, fillText);
-            dataWriter.addActionTestStep(state, fillAction, page);
+            dataWriter.addActionTestStep(bddStep, state, fillAction, page);
 
             fillAction.run(system, state, 0);
 
@@ -326,7 +329,7 @@ public class PlaywrightMcpDriver implements McpInterface {
 
             PlaywrightWidget widget = new PlaywrightWidget(state, state, elementHandle);
             PlaywrightSelect selectAction = new PlaywrightSelect(widget, optionValue);
-            dataWriter.addActionTestStep(state, selectAction, page);
+            dataWriter.addActionTestStep(bddStep, state, selectAction, page);
 
             selectAction.run(system, state, 0);
 
@@ -404,7 +407,7 @@ public class PlaywrightMcpDriver implements McpInterface {
         }
 
         // Save the execution steps when we have valid asserts for the BDD instructions
-        dataWriter.addAssertTestStep(state, assertText);
+        dataWriter.addAssertTestStep(bddStep, state, assertText);
         dataWriter.saveExecutionSteps();
 
         return "Assertion created successfully!";
