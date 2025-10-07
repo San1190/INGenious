@@ -37,13 +37,20 @@ public class MCPAgentPanel {
 		JPanel inputPanel = new JPanel();
 		inputPanel.setLayout(new BorderLayout());
 
-		JPanel formPanel = new JPanel(new GridLayout(3, 2, 5, 5));
+		JPanel formPanel = new JPanel(new GridLayout(4, 2, 5, 5));
 
 		JLabel openaiLabel = new JLabel("OpenAI model:");
 		JTextField openaiTextField = new JTextField(40);
-		openaiTextField.setText("gpt-4.1-mini");
+		openaiTextField.setText("gpt-5-mini");
 		formPanel.add(openaiLabel);
 		formPanel.add(openaiTextField);
+
+		JLabel reasoningLabel = new JLabel("Reasoning effort:");
+		String[] reasoningOptions = { "minimal", "low", "medium", "high" };
+		JComboBox<String> reasoningCombo = new JComboBox<>(reasoningOptions);
+		reasoningCombo.setSelectedItem("low");
+		formPanel.add(reasoningLabel);
+		formPanel.add(reasoningCombo);
 
 		JLabel actionsLabel = new JLabel("Max Actions:");
 		JSpinner actionsSpinner = new JSpinner();
@@ -75,6 +82,7 @@ public class MCPAgentPanel {
 		launchButton.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				String openaiModel = openaiTextField.getText().trim();
+				String reasoningLevel = (String) reasoningCombo.getSelectedItem();
 				int maxActions = (Integer) actionsSpinner.getValue();
 				String bddInstructions = bddTextArea.getText();
 
@@ -84,6 +92,7 @@ public class MCPAgentPanel {
 				LlmMcpAgent llmMcpAgent = new LlmMcpAgent(
 						sMainFrame.getProject(),
 						openaiModel,
+						reasoningLevel,
 						maxActions,
 						bddInstructions);
 

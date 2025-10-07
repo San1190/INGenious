@@ -11,6 +11,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 public class LlmMcpAgent {
 
@@ -18,19 +19,31 @@ public class LlmMcpAgent {
 
 	private final String OPENAI_API_KEY = System.getenv("OPENAI_API");
 	private final String OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
-	private final OkHttpClient client = new OkHttpClient();
+	private final OkHttpClient client;
 	private final ObjectMapper mapper = new ObjectMapper();
 
 	private final int maxActions;
 	private final String openaiModel;
+	private final String reasoningLevel;
 	private final String bddInstructions;
 	private final McpInterface mcpInterface;
 
-	public LlmMcpAgent(Project project, String openaiModel, int maxActions, String bddInstructions) {
+	public LlmMcpAgent(Project project,
+					   String openaiModel,
+					   String reasoningLevel,
+					   int maxActions,
+					   String bddInstructions) {
 		this.openaiModel = openaiModel;
+		this.reasoningLevel = reasoningLevel;
 		this.maxActions = maxActions;
 		this.bddInstructions = bddInstructions;
 		this.mcpInterface = new PlaywrightMcpDriver(project);
+		this.client = new OkHttpClient.Builder()
+				.connectTimeout(30, TimeUnit.SECONDS)
+				.writeTimeout(120, TimeUnit.SECONDS)
+				.readTimeout(20, TimeUnit.MINUTES)
+				.retryOnConnectionFailure(true)
+				.build();
 	}
 
 	public String runLLMAgent() {
@@ -49,6 +62,10 @@ public class LlmMcpAgent {
 			body.put("messages", messages);
 			body.put("tools", tools);
 			body.put("tool_choice", "auto");
+
+			if (isReasoningModel(openaiModel)) {
+				body.put("reasoning_effort", reasoningLevel);
+			}
 
 			try (Response response = client.newCall(
 					new Request.Builder()
@@ -191,6 +208,12 @@ public class LlmMcpAgent {
 	private boolean supportsVision(String model) {
 		String m = model == null ? "" : model.toLowerCase();
 		return m.contains("gpt-4o") || m.contains("gpt-4.1") || m.contains("gpt-5");
+	}
+
+	private boolean isReasoningModel(String model) {
+		if (model == null) return false;
+		String m = model.toLowerCase();
+		return m.startsWith("gpt-5");
 	}
 
 	private static void attachStateImage(List<Map<String, Object>> messages, String base64Png) {
