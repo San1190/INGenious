@@ -1,12 +1,14 @@
 package com.ing.ide.main.testar;
 
-import com.ing.datalib.component.*;
+import com.ing.datalib.component.Project;
+import com.ing.datalib.component.Scenario;
+import com.ing.datalib.component.TestCase;
+import com.ing.datalib.component.TestStep;
 import com.ing.datalib.or.ObjectRepository;
 import com.ing.datalib.or.common.ObjectGroup;
 import com.ing.datalib.or.web.WebOR;
 import com.ing.datalib.or.web.WebORObject;
 import com.ing.datalib.or.web.WebORPage;
-import com.ing.ide.main.mainui.components.testdesign.tree.model.ReusableTreeModel;
 import com.ing.ide.main.testar.playwright.actions.PlaywrightClick;
 import com.ing.ide.main.testar.playwright.actions.PlaywrightFill;
 import com.ing.ide.main.testar.playwright.actions.PlaywrightSelect;
@@ -16,20 +18,14 @@ import com.ing.ide.main.testar.playwright.system.PlaywrightWidget;
 import com.microsoft.playwright.ElementHandle;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
-import org.apache.logging.log4j.Level;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.testar.monkey.alayer.Action;
 import org.testar.monkey.alayer.Tags;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.List;
 import java.util.function.Function;
 
 public class TESTARDataWriter {
-
-    private static final Logger logger = LogManager.getLogger();
 
     private final Project project;
     private final ObjectRepository objectRepository;
@@ -116,7 +112,14 @@ public class TESTARDataWriter {
                 if (exactCount == 1) return value + ";exact";
             }
         } catch (Exception e) {
-            logger.log(Level.ERROR, "Locator evaluation failed for '{}'", value, e);
+            java.util.logging.Logger.getLogger(TESTARDataWriter.class.getName()).log(
+                    java.util.logging.Level.SEVERE,
+                    "Locator evaluation failed for '{" +value  + "}'"
+            );
+            java.util.logging.Logger.getLogger(TESTARDataWriter.class.getName()).log(
+                    java.util.logging.Level.SEVERE,
+                    e.getMessage()
+            );
         }
         return value;
     }

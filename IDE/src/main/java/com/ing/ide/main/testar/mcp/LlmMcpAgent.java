@@ -2,20 +2,15 @@ package com.ing.ide.main.testar.mcp;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ing.datalib.component.Project;
+import com.ing.ide.main.testar.mcp.helper.McpNames;
 import com.ing.ide.main.testar.mcp.helper.McpToolBuilder;
 import com.ing.ide.main.testar.mcp.helper.McpToolExecutor;
-import com.ing.ide.main.testar.mcp.helper.McpNames;
 import okhttp3.*;
-import org.apache.logging.log4j.Level;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 public class LlmMcpAgent {
-
-	private static final Logger logger = LogManager.getLogger();
 
 	private final String OPENAI_API_KEY = System.getenv("OPENAI_API");
 	private final String OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
@@ -85,16 +80,16 @@ public class LlmMcpAgent {
 							try {
 								waitTime = Long.parseLong(retryAfter) * 1333L; // conversion with 33% margin
 							} catch (NumberFormatException e) {
-								logger.log(Level.ERROR, "Invalid Retry-After header value: " + retryAfter);
+								addSevereLog("Invalid Retry-After header value: " + retryAfter);
 							}
 						}
 
-						logger.log(Level.ERROR, "OpenAI rate limited (429)... wait " + (waitTime / 1000) + " seconds...");
+						addInfoLog("OpenAI rate limited (429)... wait " + (waitTime / 1000) + " seconds...");
 						Thread.sleep(waitTime);
 					} else {
 						String failed = "Stop execution due to OpenAI call fail: " + response.code();
-						logger.log(Level.ERROR, failed);
-						logger.log(Level.ERROR, response.body().string());
+						addSevereLog(failed);
+						addSevereLog(response.body().string());
 						return failed;
 					}
 				}
@@ -112,7 +107,7 @@ public class LlmMcpAgent {
 				// Empty toolCalls response. Don't stop, give the LLM another chance
 				if (toolCalls == null || toolCalls.isEmpty()) {
 					String feedback = "ISSUE: No tool was selected. Please review the last results.";
-					logger.log(Level.ERROR, feedback);
+					addInfoLog(feedback);
 					messages.add(Map.of(
 							"role", "user",
 							"content", "Reminder: choose a valid tool to proceed."
@@ -127,15 +122,15 @@ public class LlmMcpAgent {
 					String toolName = (String) function.get("name");
 					String argumentsJson = (String) function.get("arguments");
 
-					logger.log(Level.ERROR, "DEBUG toolName: " + toolName);
-					logger.log(Level.ERROR, "DEBUG argumentsJson: " + argumentsJson);
+					addInfoLog("DEBUG toolName: " + toolName);
+					addInfoLog("DEBUG argumentsJson: " + argumentsJson);
 
 					Object resultObj = executor.execute(toolName, argumentsJson);
 					String result = (resultObj == null) ? "null" : resultObj.toString();
 
 					// Check if stop the execution due to the LLM decision
 					if(McpNames.of(McpInterface::stopTestExecution).equals(toolName)){
-						logger.log(Level.ERROR, "LLM agent decided to stop the test execution");
+						addInfoLog("LLM agent decided to stop the test execution");
 						return "LLM agent decided to stop the test execution";
 					}
 
@@ -158,18 +153,18 @@ public class LlmMcpAgent {
 						));
 					} else {
 						// This is only for debugging purposes
-						logger.log(Level.ERROR, "DEBUG result: " + result);
+						addInfoLog("DEBUG result: " + result);
 					}
 				}
 
 			} catch (Exception e) {
-				logger.log(Level.ERROR, "LLM step failed", e);
+				addSevereLog("LLM step failed: " + e.getMessage());
 				e.printStackTrace();
 			}
 		}
 
 		mcpInterface.stopTestExecution();
-		logger.log(Level.ERROR, "maxAction executed");
+		addInfoLog("maxAction executed");
 		return "maxAction executed";
 	}
 
@@ -228,6 +223,20 @@ public class LlmMcpAgent {
 
 		imageMsg.put("content", content);
 		messages.add(imageMsg);
+	}
+
+	private void addInfoLog(String msg){
+		java.util.logging.Logger.getLogger(LlmMcpAgent.class.getName()).log(
+				java.util.logging.Level.INFO,
+				msg
+		);
+	}
+
+	private void addSevereLog(String msg){
+		java.util.logging.Logger.getLogger(LlmMcpAgent.class.getName()).log(
+				java.util.logging.Level.SEVERE,
+				msg
+		);
 	}
 
 }

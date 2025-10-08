@@ -3,9 +3,6 @@ package com.ing.ide.main.testar.mcp.helper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ing.ide.main.testar.mcp.McpInterface;
-import org.apache.logging.log4j.Level;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
@@ -23,8 +20,6 @@ import java.util.Map;
  */
 public final class McpToolExecutor<T> {
 
-    private static final Logger logger = LogManager.getLogger();
-
     private final T impl;
     private final ObjectMapper mapper;
     private final Map<String, Method> byName = new HashMap<>();
@@ -40,7 +35,10 @@ public final class McpToolExecutor<T> {
 
             String name = mcpMethod.name().isEmpty() ? m.getName() : mcpMethod.name();
             if (byName.putIfAbsent(name, m) != null) {
-                logger.log(Level.ERROR, "Duplicate mcpMethod name: " + name);
+                java.util.logging.Logger.getLogger(McpToolBuilder.class.getName()).log(
+                        java.util.logging.Level.SEVERE,
+                        "Duplicate mcpMethod name: " + name
+                );
                 continue;
             }
 
@@ -48,7 +46,10 @@ public final class McpToolExecutor<T> {
             for (Parameter p : m.getParameters()) {
                 McpParam mcpParam = p.getAnnotation(McpParam.class);
                 if (mcpParam == null) {
-                    logger.log(Level.ERROR, "Missing mcpParam on " + m);
+                    java.util.logging.Logger.getLogger(McpToolBuilder.class.getName()).log(
+                            java.util.logging.Level.SEVERE,
+                            "Missing mcpParam on " + m
+                    );
                     continue;
                 }
                 order.add(mcpParam.name());
@@ -64,7 +65,10 @@ public final class McpToolExecutor<T> {
     public Object execute(String functionName, String argumentsJson) throws Exception {
         Method m = byName.get(functionName);
         if (m == null) {
-            logger.log(Level.ERROR, "Unknown function: " + functionName);
+            java.util.logging.Logger.getLogger(McpToolBuilder.class.getName()).log(
+                    java.util.logging.Level.SEVERE,
+                    "Unknown function: " + functionName
+            );
             return "";
         }
 

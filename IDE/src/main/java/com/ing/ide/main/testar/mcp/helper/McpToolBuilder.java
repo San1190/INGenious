@@ -1,13 +1,13 @@
 package com.ing.ide.main.testar.mcp.helper;
 
 import com.ing.ide.main.testar.mcp.McpInterface;
-import org.apache.logging.log4j.Level;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Builds OpenAI Chat Completions "tools" definitions from the annotated {@link McpInterface} using reflection.
@@ -17,8 +17,6 @@ import java.util.*;
  * ready to serialize as the request body’s {@code "tools"} array.
  */
 public final class McpToolBuilder {
-
-    private static final Logger logger = LogManager.getLogger();
 
     private McpToolBuilder() {}
 
@@ -35,7 +33,10 @@ public final class McpToolBuilder {
             for (Parameter p : m.getParameters()) {
                 McpParam mcpParam = p.getAnnotation(McpParam.class);
                 if (mcpParam == null) {
-                    logger.log(Level.ERROR, "Parameter missing mcpParam on " + m);
+                    java.util.logging.Logger.getLogger(McpToolBuilder.class.getName()).log(
+                            java.util.logging.Level.SEVERE,
+                            "Parameter missing mcpParam on " + m
+                    );
                     continue;
                 }
 

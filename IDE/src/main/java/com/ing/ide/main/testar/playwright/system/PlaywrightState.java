@@ -1,5 +1,6 @@
 package com.ing.ide.main.testar.playwright.system;
 
+import com.microsoft.playwright.ElementHandle;
 import com.microsoft.playwright.Page;
 import org.testar.StateManagementTags;
 import org.testar.monkey.Assert;
@@ -7,14 +8,39 @@ import org.testar.monkey.Util;
 import org.testar.monkey.alayer.*;
 import org.testar.monkey.alayer.exceptions.NoSuchTagException;
 
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.NoSuchElementException;
-import java.util.Set;
+import java.util.*;
+import java.util.stream.Stream;
 
 public class PlaywrightState extends PlaywrightWidget implements State {
 
     private final Page page;
+
+    // Define selectors for clickable elements
+    private final String[] clickableSelectors = {
+            "a",                       // Links
+            "button",                  // Buttons
+            "input[type='button']",    // Input button
+            "input[type='submit']",    // Input submit button
+            "input[type='reset']",     // Input reset button
+            "input[type='checkbox']",  // Checkbox inputs
+            "input[type='radio']",     // Radio button inputs
+            "[onclick]",               // Elements with onclick attributes (custom clickable elements)
+            "[role='button']"          // Elements with a role attribute as buttons (often used in modern UIs)
+    };
+
+    // Define selectors for fillable elements
+    private final String[] fillableSelectors = {
+            "input[type='text']",      // Text input fields
+            "textarea",                // Text areas
+            "input[class='input']",    // Input fields
+            "input[type='email']",     // Email input fields
+            "input[type='password']"   // Password input fields
+    };
+
+    // Define selectors for selectable elements
+    private final String[] selectableSelectors = {
+            "select"                   // Dropdowns
+    };
 
     public PlaywrightState(PlaywrightSUT system) {
         super(null, null);
@@ -28,6 +54,35 @@ public class PlaywrightState extends PlaywrightWidget implements State {
 
     public Page getPage() {
         return page;
+    }
+
+    public List<PlaywrightWidget> getWidgets() {
+        List<PlaywrightWidget> stateWidgets = new ArrayList<>();
+
+        String widgetsSelector = String.join(", ", Stream.of(
+                Arrays.stream(clickableSelectors),
+                Arrays.stream(fillableSelectors),
+                Arrays.stream(selectableSelectors)
+        ).flatMap(s -> s).toArray(String[]::new));
+
+        List<ElementHandle> stateElements = this.page.querySelectorAll(widgetsSelector);
+
+        for (ElementHandle elementHandle : stateElements) {
+            PlaywrightWidget widget = new PlaywrightWidget(this, this, elementHandle);
+            stateWidgets.add(widget);
+        }
+
+        return stateWidgets;
+    }
+
+    public PlaywrightWidget getWidgetFromCssSelector(String cssSelector) {
+        ElementHandle elementHandle = this.page.querySelector(cssSelector);
+        if(elementHandle != null) return new PlaywrightWidget(this, this, elementHandle);
+        else return null;
+    }
+
+    public byte[] getScreenshot() {
+        return this.page.screenshot(new Page.ScreenshotOptions().setFullPage(true));
     }
 
     @Override

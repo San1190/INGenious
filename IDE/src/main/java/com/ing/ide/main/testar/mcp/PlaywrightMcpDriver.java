@@ -9,55 +9,24 @@ import com.ing.ide.main.testar.playwright.system.PlaywrightSUT;
 import com.ing.ide.main.testar.playwright.system.PlaywrightState;
 import com.ing.ide.main.testar.playwright.system.PlaywrightTags;
 import com.ing.ide.main.testar.playwright.system.PlaywrightWidget;
-import com.microsoft.playwright.*;
-import org.apache.logging.log4j.Level;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import com.microsoft.playwright.ElementHandle;
+import com.microsoft.playwright.Locator;
+import com.microsoft.playwright.PlaywrightException;
+import com.microsoft.playwright.Response;
 
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.*;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 public class PlaywrightMcpDriver implements McpInterface {
-
-    private static final Logger logger = LogManager.getLogger();
 
     private final TESTARDataWriter dataWriter;
 
     private PlaywrightSUT system;
-    private Page page;
     private PlaywrightState state;
 
     private final List<String> executedAction = new ArrayList<>();
-
-    // Define selectors for clickable elements
-    private final static String[] clickableSelectors = {
-            "a",                       // Links
-            "button",                  // Buttons
-            "input[type='button']",    // Input button
-            "input[type='submit']",    // Input submit button
-            "input[type='reset']",     // Input reset button
-            "input[type='checkbox']",  // Checkbox inputs
-            "input[type='radio']",     // Radio button inputs
-            "[onclick]",               // Elements with onclick attributes (custom clickable elements)
-            "[role='button']"          // Elements with a role attribute as buttons (often used in modern UIs)
-    };
-
-    // Define selectors for fillable elements
-    private final static String[] fillableSelectors = {
-            "input[type='text']",      // Text input fields
-            "textarea",                // Text areas
-            "input[class='input']",    // Input fields
-            "input[type='email']",     // Email input fields
-            "input[type='password']"   // Password input fields
-    };
-
-    // Define selectors for selectable elements
-    private final static String[] selectableSelectors = {
-            "select"                   // Dropdowns
-    };
 
     public PlaywrightMcpDriver(Project project) {
         // Initialize the data writer for saving OR objects and steps
@@ -68,10 +37,10 @@ public class PlaywrightMcpDriver implements McpInterface {
     public String loadWebURL(String bddStep, String url){
         try {
             this.system = new PlaywrightSUT(url);
-            this.page = this.system.getPage();
+            this.state = new PlaywrightState(this.system);
         } catch (Exception e) {
-            logger.log(Level.ERROR, "Failed to run PlaywrightSUT with URL: " + url);
-            logger.log(Level.ERROR, e.getMessage());
+            addSevereLog("Failed to run PlaywrightSUT with URL: " + url);
+            addSevereLog(e.getMessage());
             return "ISSUE loading the Web URL: " + e.getMessage();
         }
 
@@ -90,9 +59,9 @@ public class PlaywrightMcpDriver implements McpInterface {
 
     @Override
     public String getCurrentURL() {
-        if (this.page == null) return "ISSUE: No web state-page initialized";
+        if (this.state == null) return "ISSUE: No web state-page initialized";
 
-        String url = this.page.url();
+        String url = this.state.getPage().url();
         if (url == null || url.isEmpty()) return "ISSUE: No web url available.";
 
         return url;
@@ -100,9 +69,9 @@ public class PlaywrightMcpDriver implements McpInterface {
 
     @Override
     public String navigateBack() {
-        if (this.page == null) return "ISSUE: No web state-page initialized";
+        if (this.state == null) return "ISSUE: No web state-page initialized";
 
-        Response response = this.page.goBack();
+        Response response = this.state.getPage().goBack();
         if (response == null) return "ISSUE: Cannot navigate back - no previous page.";
 
         // Add browser control test step into INGenious
@@ -119,22 +88,16 @@ public class PlaywrightMcpDriver implements McpInterface {
 
     @Override
     public String getState() {
-        if (this.page == null) return "ISSUE: No web state-page initialized";
+        if (this.state == null) return "ISSUE: No web state-page initialized";
 
-        List<String> cssStateWidgets = new ArrayList<>();
+        List<String> widgetsContext = new ArrayList<>();
 
         try {
             state = new PlaywrightState(system);
 
-            String interactiveWidgetsSelector = String.join(", ", Stream.of(
-                    Arrays.stream(clickableSelectors),
-                    Arrays.stream(fillableSelectors),
-                    Arrays.stream(selectableSelectors)
-            ).flatMap(s -> s).toArray(String[]::new));
-            List<ElementHandle> stateElements = state.getPage().querySelectorAll(interactiveWidgetsSelector);
+            List<PlaywrightWidget> stateWidgets = state.getWidgets();
 
-            for (ElementHandle elementHandle : stateElements) {
-                PlaywrightWidget widget = new PlaywrightWidget(state, state, elementHandle);
+            for (PlaywrightWidget widget : stateWidgets) {
 
                 // For widgets with CSS locators
                 if(!widget.get(PlaywrightTags.WebLocatorCSS, "").isEmpty()
@@ -151,7 +114,7 @@ public class PlaywrightMcpDriver implements McpInterface {
 
                     // For select elements list the available options
                     if ("select".equalsIgnoreCase(widget.get(PlaywrightTags.WebTagName, ""))) {
-                        List<ElementHandle> options = elementHandle.querySelectorAll("option");
+                        List<ElementHandle> options = widget.getElementHandle().querySelectorAll("option");
                         List<String> optionValues = new ArrayList<>();
 
                         for (ElementHandle option : options) {
@@ -169,26 +132,26 @@ public class PlaywrightMcpDriver implements McpInterface {
                     }
 
                     // Then serialize each widget as JSON or custom line format:
-                    cssStateWidgets.add(widgetInfo.entrySet().stream()
+                    widgetsContext.add(widgetInfo.entrySet().stream()
                             .map(e -> e.getKey() + ": " + e.getValue())
                             .collect(Collectors.joining(" | "))
                     );
 
                     // Save them in the INGenious object repository
                     try {
-                        dataWriter.addWidgetObject(widget, page);
+                        dataWriter.addWidgetObject(widget, state.getPage());
                     } catch (Exception e) {
-                        logger.log(Level.ERROR, "Failed add action objects to the OR" + e.getMessage());
+                        addSevereLog("Failed add action objects to the OR" + e.getMessage());
                     }
                 }
             }
 
         } catch (PlaywrightException e) {
-            logger.log(Level.ERROR, "Failed to collect state interactive elements: " + e.getMessage());
+            addSevereLog("Failed to collect state interactive elements: " + e.getMessage());
             return "ISSUE trying to obtain state information: " + e.getMessage();
         }
 
-        return String.join("\n", cssStateWidgets);
+        return String.join("\n", widgetsContext);
     }
 
     private boolean isExternalLink(PlaywrightState state, String href) {
@@ -222,7 +185,7 @@ public class PlaywrightMcpDriver implements McpInterface {
             return host;
 
         } catch (URISyntaxException e) {
-            logger.log(Level.ERROR, "Exception extracting the host domain of: " + url);
+            addSevereLog("Exception extracting the host domain of: " + url);
         }
 
         return "";
@@ -230,30 +193,29 @@ public class PlaywrightMcpDriver implements McpInterface {
 
     @Override
     public String executeClickAction(String bddStep, String rawCssSelector) {
-        if (this.page == null) return "ISSUE: No web state-page initialized";
+        if (this.state == null) return "ISSUE: No web state-page initialized";
 
-        logger.log(Level.ERROR, "rawCssSelector: " + rawCssSelector);
+        addInfoLog("rawCssSelector: " + rawCssSelector);
 
         String cssSelector = normalizeCssSelector(rawCssSelector);
 
         if (cssSelector == null || cssSelector.trim().isEmpty()) {
-            logger.log(Level.ERROR, "ISSUE with an invalid CSS selector: " + rawCssSelector);
+            addSevereLog("ISSUE with an invalid CSS selector: " + rawCssSelector);
             return "ISSUE with an invalid CSS selector: " + rawCssSelector;
         }
 
         try {
-            logger.log(Level.ERROR, "Normalized CSS Selector: " + cssSelector);
+            addInfoLog("Normalized CSS Selector: " + cssSelector);
 
-            ElementHandle elementHandle = this.page.querySelector(cssSelector);
+            PlaywrightWidget widget = state.getWidgetFromCssSelector(cssSelector);
 
-            if (elementHandle == null) {
-                logger.log(Level.ERROR, "ISSUE because no matching element found for CSS selector: " + cssSelector);
+            if (widget == null) {
+                addSevereLog("ISSUE because no matching element found for CSS selector: " + cssSelector);
                 return "ISSUE because no matching element found for CSS selector: " + cssSelector;
             }
 
-            PlaywrightWidget widget = new PlaywrightWidget(state, state, elementHandle);
             PlaywrightClick clickAction = new PlaywrightClick(widget);
-            dataWriter.addActionTestStep(bddStep, state, clickAction, page);
+            dataWriter.addActionTestStep(bddStep, state, clickAction, state.getPage());
 
             clickAction.run(system, state, 0);
 
@@ -261,37 +223,36 @@ public class PlaywrightMcpDriver implements McpInterface {
             saveExecutedAction(actionDescription);
             return actionDescription;
         } catch (Exception e) {
-            logger.log(Level.ERROR, "Failed to execute action for selector: " + cssSelector + " - " + e.getMessage(), e);
+            addSevereLog("Failed to execute action for selector: " + cssSelector + " - " + e.getMessage());
             return "ISSUE executing a click action: " + e.getMessage();
         }
     }
 
     @Override
     public String executeFillAction(String bddStep, String rawCssSelector, String fillText) {
-        if (this.page == null) return "ISSUE: No web state-page initialized";
+        if (this.state == null) return "ISSUE: No web state-page initialized";
 
-        logger.log(Level.ERROR, "rawCssSelector: " + rawCssSelector);
+        addInfoLog("rawCssSelector: " + rawCssSelector);
 
         String cssSelector = normalizeCssSelector(rawCssSelector);
 
         if (cssSelector == null || cssSelector.trim().isEmpty()) {
-            logger.log(Level.ERROR, "ISSUE with an invalid CSS selector: " + rawCssSelector);
+            addSevereLog("ISSUE with an invalid CSS selector: " + rawCssSelector);
             return "ISSUE with an invalid CSS selector: " + rawCssSelector;
         }
 
         try {
-            logger.log(Level.ERROR, "Normalized CSS Selector: " + cssSelector);
+            addInfoLog("Normalized CSS Selector: " + cssSelector);
 
-            ElementHandle elementHandle = this.page.querySelector(cssSelector);
+            PlaywrightWidget widget = state.getWidgetFromCssSelector(cssSelector);
 
-            if (elementHandle == null) {
-                logger.log(Level.ERROR, "ISSUE because no matching element found for CSS selector: " + cssSelector);
+            if (widget == null) {
+                addSevereLog("ISSUE because no matching element found for CSS selector: " + cssSelector);
                 return "ISSUE because no matching element found for CSS selector: " + cssSelector;
             }
 
-            PlaywrightWidget widget = new PlaywrightWidget(state, state, elementHandle);
             PlaywrightFill fillAction = new PlaywrightFill(widget, fillText);
-            dataWriter.addActionTestStep(bddStep, state, fillAction, page);
+            dataWriter.addActionTestStep(bddStep, state, fillAction, state.getPage());
 
             fillAction.run(system, state, 0);
 
@@ -299,37 +260,36 @@ public class PlaywrightMcpDriver implements McpInterface {
             saveExecutedAction(actionDescription);
             return actionDescription;
         } catch (Exception e) {
-            logger.log(Level.ERROR, "Failed to execute action for selector: " + cssSelector + " - " + e.getMessage(), e);
+            addSevereLog("Failed to execute action for selector: " + cssSelector + " - " + e.getMessage());
             return "ISSUE executing a fill action: " + e.getMessage();
         }
     }
 
     @Override
     public String executeSelectAction(String bddStep, String rawCssSelector, String optionValue) {
-        if (this.page == null) return "ISSUE: No web state-page initialized";
+        if (this.state == null) return "ISSUE: No web state-page initialized";
 
-        logger.log(Level.ERROR, "rawCssSelector: " + rawCssSelector);
+        addInfoLog("rawCssSelector: " + rawCssSelector);
 
         String cssSelector = normalizeCssSelector(rawCssSelector);
 
         if (cssSelector == null || cssSelector.trim().isEmpty()) {
-            logger.log(Level.ERROR, "ISSUE with an invalid CSS selector: " + rawCssSelector);
+            addSevereLog("ISSUE with an invalid CSS selector: " + rawCssSelector);
             return "ISSUE with an invalid CSS selector: " + rawCssSelector;
         }
 
         try {
-            logger.log(Level.ERROR, "Normalized CSS Selector: " + cssSelector);
+            addInfoLog("Normalized CSS Selector: " + cssSelector);
 
-            ElementHandle elementHandle = this.page.querySelector(cssSelector);
+            PlaywrightWidget widget = state.getWidgetFromCssSelector(cssSelector);
 
-            if (elementHandle == null) {
-                logger.log(Level.ERROR, "ISSUE because no matching element found for CSS selector: " + cssSelector);
+            if (widget == null) {
+                addSevereLog("ISSUE because no matching element found for CSS selector: " + cssSelector);
                 return "ISSUE because no matching element found for CSS selector: " + cssSelector;
             }
 
-            PlaywrightWidget widget = new PlaywrightWidget(state, state, elementHandle);
             PlaywrightSelect selectAction = new PlaywrightSelect(widget, optionValue);
-            dataWriter.addActionTestStep(bddStep, state, selectAction, page);
+            dataWriter.addActionTestStep(bddStep, state, selectAction, state.getPage());
 
             selectAction.run(system, state, 0);
 
@@ -337,7 +297,7 @@ public class PlaywrightMcpDriver implements McpInterface {
             saveExecutedAction(actionDescription);
             return actionDescription;
         } catch (Exception e) {
-            logger.log(Level.ERROR, "Failed to execute select action for selector: " + cssSelector + " - " + e.getMessage(), e);
+            addSevereLog("Failed to execute select action for selector: " + cssSelector + " - " + e.getMessage());
             return "ISSUE executing a select action: " + e.getMessage();
         }
     }
@@ -378,22 +338,20 @@ public class PlaywrightMcpDriver implements McpInterface {
     @Override
     public String getStateImage() {
         try {
-            byte[] screenshotBytes = this.page.screenshot(
-                    new Page.ScreenshotOptions().setFullPage(true)
-            );
+            byte[] screenshotBytes = state.getScreenshot();
             return Base64.getEncoder().encodeToString(screenshotBytes);
         } catch (Exception e){
-            logger.log(Level.ERROR, "Failed to obtain the getStateImage: " + e.getMessage());
+            addSevereLog("Failed to obtain the getStateImage: " + e.getMessage());
             return ""; // This empty string is used in the MCPAgent switch
         }
     }
 
     @Override
     public String addStepAssert(String bddStep, String assertText) {
-        if (this.page == null) return "ISSUE: No web state-page initialized";
+        if (this.state == null) return "ISSUE: No web state-page initialized";
 
         // Verify that the LLM assertText can be used as locator for assertion
-        Locator locator = page.locator("text=" + assertText);
+        Locator locator = state.getPage().locator("text=" + assertText);
         if (locator.count() == 0 ) {
             return "ISSUE: The provided assert text to be used as locator does not match with any GUI web element. " +
                     "Try again with a correct text locator.";
@@ -419,6 +377,20 @@ public class PlaywrightMcpDriver implements McpInterface {
         dataWriter.saveExecutionSteps();
         // Then, close the playwright session
         this.system.stop();
+    }
+
+    private void addInfoLog(String msg){
+        java.util.logging.Logger.getLogger(PlaywrightMcpDriver.class.getName()).log(
+                java.util.logging.Level.INFO,
+                msg
+        );
+    }
+
+    private void addSevereLog(String msg){
+        java.util.logging.Logger.getLogger(PlaywrightMcpDriver.class.getName()).log(
+                java.util.logging.Level.SEVERE,
+                msg
+        );
     }
 
 }
