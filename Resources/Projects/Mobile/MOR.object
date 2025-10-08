@@ -1,5 +1,5 @@
 <Root type="MOR" ref="Mobile">
-  <Page packageName="com.swaglabsmobileapp" ref="swaglabsmobileapp">
+  <Page packageName="" ref="swaglabsmobileapp">
     <ObjectGroup ref="Username">
       <Object ref="Username">
         <Property value="" ref="UiAutomator" pref="1"/>
@@ -48,7 +48,7 @@
         <Property value="" ref="UiAutomation" pref="2"/>
         <Property value="" ref="id" pref="3"/>
         <Property value="" ref="Accessibility" pref="4"/>
-        <Property value="(//*[@content-desc='test-ADD TO CART'])[3] | (//*[@name=&quot;test-ADD TO CART&quot;])[1]" ref="xpath" pref="5"/>
+        <Property value="(//*[@content-desc='test-ADD TO CART'])[1] | (//*[@name=&quot;test-ADD TO CART&quot;])[1]" ref="xpath" pref="5"/>
         <Property value="" ref="css" pref="6"/>
         <Property value="" ref="name" pref="7"/>
         <Property value="" ref="tagName" pref="8"/>
@@ -62,7 +62,7 @@
         <Property value="" ref="UiAutomation" pref="2"/>
         <Property value="" ref="id" pref="3"/>
         <Property value="" ref="Accessibility" pref="4"/>
-        <Property value="(//*[@name=&quot;1&quot;])[4] | //android.view.ViewGroup[@content-desc=&quot;test-Cart&quot;]/android.view.ViewGroup/android.widget.ImageView" ref="xpath" pref="5"/>
+        <Property value="(//*[@name=&quot;1&quot;])[4] | //android.view.ViewGroup[@content-desc=&quot;test-Cart&quot;]/android.view.ViewGroup/android.widget.ImageView | (//XCUIElementTypeOther[@name=&quot;1&quot;])[4]" ref="xpath" pref="5"/>
         <Property value="" ref="css" pref="6"/>
         <Property value="" ref="name" pref="7"/>
         <Property value="" ref="tagName" pref="8"/>
@@ -112,8 +112,8 @@
         <Property value="" ref="class" pref="10"/>
       </Object>
     </ObjectGroup>
-    <ObjectGroup ref="Zip/Postal Code">
-      <Object ref="Zip/Postal Code">
+    <ObjectGroup ref="ZipPostal Code">
+      <Object ref="ZipPostal Code">
         <Property value="" ref="UiAutomator" pref="1"/>
         <Property value="" ref="UiAutomation" pref="2"/>
         <Property value="" ref="id" pref="3"/>

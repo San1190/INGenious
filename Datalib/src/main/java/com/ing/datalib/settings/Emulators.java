@@ -3,6 +3,7 @@ package com.ing.datalib.settings;
 
 import com.ing.datalib.settings.emulators.Emulator;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ing.datalib.util.data.LinkedProperties;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -10,6 +11,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import com.ing.datalib.settings.Capabilities;
 
 /**
  *
@@ -40,6 +42,11 @@ public class Emulators {
             }
         }
     }
+    
+    public void reload(){
+        emulators.clear();
+        load();
+    }
 
     public void addAppiumEmulator(String emulatorName, String url) {
         addEmulator(emulatorName);
@@ -51,6 +58,17 @@ public class Emulators {
         if (getEmulator(emulatorName) == null) {
             emulators.add(new Emulator(emulatorName));
         }
+    }
+  
+    public LinkedProperties defaultEmulatorCap(){
+        LinkedProperties props = new LinkedProperties();
+        // Add default key-value pairs
+        props.setProperty("deviceName", "");
+        props.setProperty("platformName", "");
+        props.setProperty("platformVersion", "");
+        props.setProperty("automationName", "");
+        
+        return props;
     }
 
     public void deleteEmulator(String emulatorName) {

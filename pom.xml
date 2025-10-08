@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.ing</groupId>
     <artifactId>ingenious-playwright</artifactId>
-    <version>2.2</version>
+    <version>2.3</version>
     <packaging>pom</packaging>
     <modules>
         <module>StoryWriter</module>
@@ -97,6 +97,11 @@
                     <source>${maven.compiler.source}</source>
                     <target>${maven.compiler.target}</target>
                 </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>versions-maven-plugin</artifactId>
+                <version>2.18.0</version>
             </plugin>
         </plugins>
     </build>

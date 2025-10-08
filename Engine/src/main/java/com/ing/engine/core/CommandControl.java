@@ -5,6 +5,7 @@ import com.ing.datalib.or.common.ObjectGroup;
 import com.ing.datalib.or.image.ImageORObject;
 import com.ing.datalib.settings.DriverSettings;
 import com.ing.datalib.util.data.LinkedProperties;
+import com.ing.datalib.settings.DriverProperties;
 import com.ing.engine.drivers.AutomationObject;
 import com.ing.engine.drivers.AutomationObject.FindType;
 import com.ing.engine.drivers.PlaywrightDriverCreation;
@@ -24,7 +25,13 @@ import java.util.Stack;
 import com.ing.engine.drivers.WebDriverCreation;
 import com.ing.engine.drivers.MobileObject;
 import com.ing.engine.drivers.MobileObject.FindmType;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Properties;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.openqa.selenium.WebElement;
 
 public abstract class CommandControl {
@@ -200,13 +207,22 @@ public abstract class CommandControl {
         runTimeVars.put(key, val);
 
     }
+    
+    public String getRuntimeVar(String key) {
 
+        if (runTimeVars.containsKey(key)) {
+             return getDynamicValue(key);
+        }
+        
+        return null;
+    }
+    
     public String getVar(String key) {
 
         System.out.println("Getting runTimeVar " + key);
         String val = getDynamicValue(key);
         if (val == null) {
-            System.err.println("runTimeVars does not contain " + key + ".Returning Empty");
+            System.err.println("runTimeVars does not contain " + key + ". Returning Empty");
             Report.updateTestLog("Get Var", "Getting From runTimeVars " + key + " Failed", Status.WARNING);
             return "";
         } else {
@@ -221,6 +237,39 @@ public abstract class CommandControl {
             return getUserDefinedData(key);
         }
         return runTimeVars.get(key);
+    }
+    
+    public String getDatasheet(String key) {
+
+        System.out.println("Getting Datasheet " + key);
+        String val = getDataSheetValue(key);
+        if (val == null) {
+            System.err.println("Datasheet does not contain " + key + ". Returning Empty");
+            Report.updateTestLog("Get Datasheet", "Getting From Datasheet " + key + " Failed", Status.WARNING);
+            return "";
+        } else {
+            return val;
+        }
+    }
+    
+    public String getDataSheetValue(String key){
+        String val = null;
+        key = key.matches("\\{(\\S)+\\}") ? key.substring(1, key.length() - 1) : key;
+        List<String> sheetlist = Control.getCurrentProject().getTestData().getTestDataFor(Control.exe.runEnv())
+                .getTestDataNames();
+        for (int sheet = 0; sheet < sheetlist.size(); sheet++) {
+            if (key.contains(sheetlist.get(sheet) + ":")) {
+                com.ing.datalib.testdata.model.TestDataModel tdModel = Control.getCurrentProject()
+                        .getTestData().getTestDataByName(sheetlist.get(sheet));
+                List<String> columns = tdModel.getColumns();
+                for (int col = 0; col < columns.size(); col++) {
+                    if (key.contains(sheetlist.get(sheet) + ":" + columns.get(col))) {
+                    	val = userData.getData(sheetlist.get(sheet), columns.get(col));
+                    }
+                }
+            }
+        }
+        return val;
     }
 
     public String getUserDefinedData(String key) {
@@ -254,12 +303,107 @@ public abstract class CommandControl {
     
     public Map<String, String> getProxySettings() {
         Map<String, String> systemSettings = new HashMap<>();
-        DriverSettings settings = Control.getCurrentProject().getProjectSettings().getDriverSettings();
+        // DriverSettings settings = Control.getCurrentProject().getProjectSettings().getDriverSettings();
+        DriverProperties settings = Control.getCurrentProject().getProjectSettings().getDriverSettings();
         systemSettings.put("proxySet", "true");            
         systemSettings.put("http.proxyHost", settings.getProperty("proxyHost"));            
         systemSettings.put("http.proxyPort", settings.getProperty("proxyPort"));
         systemSettings.put("http.proxyUser", settings.getProperty("proxyUser"));
         systemSettings.put("http.proxyPassword", settings.getProperty("proxyPassword"));
         return systemSettings;
+    }
+    
+    public static List<String> smartCommaSplitter(String strInput){
+        List<String> result = new ArrayList();
+        StringBuilder currentStr = new StringBuilder();
+        
+        boolean inQuotes = false;
+        boolean inBraces = false;
+        boolean inPercent = false;
+        
+        for(int i = 0; i < strInput.length(); i++){
+            char c = strInput.charAt(i);
+            
+            if(c == '%' && !inQuotes && !inBraces){
+                inPercent = !inPercent;
+            }
+            
+            if(c == '"' && !inPercent && !inBraces){
+                inQuotes = !inQuotes;
+            }
+            
+            if(c == '{' && !inQuotes && !inPercent){
+                inBraces = true;
+            } else if(c == '}' && !inQuotes && !inPercent){
+                inBraces = false;
+            }
+            
+            if(c == ',' && !inQuotes && !inPercent&& !inBraces){
+                result.add(currentStr.toString());
+                currentStr.setLength(0);
+            } else {
+                currentStr.append(c);
+            }
+        }
+        
+        if (currentStr.length() > 0) {
+            result.add(currentStr.toString());
+        }
+        
+        return result;
+    }
+    
+    
+    /**
+     * Detects all runtime variable keys marked with percent signs (%) in the input string
+     * and returns them as a set.
+     *
+     * <p>Runtime variable keys are identified by surrounding percent signs (e.g., %KEY%).</p>
+     *
+     * @param str the input string to be evaluated
+     * @return a set containing all detected runtime variable keys, including the percent signs
+     */
+    public static HashSet<String> getAllRuntimeNameVars(String str){
+        Pattern pattern = Pattern.compile("%(\\S+?)%");
+        Matcher matcher = pattern.matcher(str);
+        HashSet<String> runtimeVars = new HashSet<>();
+         
+        int searchStart = 0;
+
+        while (searchStart < str.length()) {
+            matcher.region(searchStart, str.length());
+            if (matcher.find()) {
+                int startIndex = matcher.start();
+                int endIndex = matcher.end();
+                
+                // Move searchStart past the current match
+                searchStart = matcher.end();
+                runtimeVars.add(str.substring(startIndex, endIndex));
+            } else {
+                break;
+            }
+        }
+        
+        return runtimeVars;
+    }
+    
+    
+    /**
+     * Resolves all runtime variables marked with percent signs (%) in the input string,
+     * including user-defined variables.
+     *
+     * <p>If no runtime variables are present, the original string is returned unchanged.</p>
+     *
+     * @param str the input string to evaluate; may or may not contain runtime variables
+     * @return a string with all detected runtime variables replaced by their resolved values,
+     *         or the original string if none are found
+     */ 
+    public String resolveAllRuntimeVars(String str) {
+        HashSet<String> keys = getAllRuntimeNameVars(str);
+        for (String key : keys) {
+            String runtimeValue = getVar(key);
+            str=str.replace(key, runtimeValue);
+        }
+        return str;
     }
 }

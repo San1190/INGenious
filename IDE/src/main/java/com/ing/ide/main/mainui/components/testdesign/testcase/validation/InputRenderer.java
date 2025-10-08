@@ -15,35 +15,35 @@ public class InputRenderer extends AbstractRenderer {
 	String shouldBeEmpty = "Syntax error. Input should be empty for the Action";
 
 	public InputRenderer() {
-		super("Input Shouldn't be empty.It should be one of [@val ,%var% ,=Function ,Sheet:Column]");
-	}
+            super("Input Shouldn't be empty.It should be one of [@val ,%var% ,=Function ,Sheet:Column]");
+        }
 
 	public void render(JComponent comp, TestStep step, Object value) {
-		if (!step.isCommented().booleanValue()) {
-			if (isEmpty(value).booleanValue()) {
-				if (!isOptional(step).booleanValue()) {
-					setEmpty(comp);
-				} else {
-					setDefault(comp);
-				}
-			} else if (isNotNeeded(step).booleanValue()) {
-				setNotPresent(comp, this.shouldBeEmpty);
-			} else if (step.isTestDataStep().booleanValue()) {
-				if (isTestDataPresent(step).booleanValue()) {
-					setDefault(comp);
-				} else {
-					setNotPresent(comp, this.testDataNotPresent);
-				}
-			}else if (isInputValid(value).booleanValue()) {
-				setDefault(comp);
-			} else {
-				setNotPresent(comp, this.inValidInput);
-			}
-		} else {
-			setDefault(comp);
-                        comp.setForeground(Color.lightGray);
-                        comp.setFont(new Font("Default", Font.ITALIC, 11));
-		}
+            if (!step.isCommented().booleanValue()) {
+                if (isEmpty(value).booleanValue()) {
+                        if (!isOptional(step).booleanValue()) {
+                                setEmpty(comp);
+                        } else {
+                                setDefault(comp);
+                        }
+                } else if (isNotNeeded(step).booleanValue()) {
+                        setNotPresent(comp, this.shouldBeEmpty);
+                } else if (step.isTestDataStep().booleanValue() && !step.getObject().matches("String Operations")) {
+                        if (isTestDataPresent(step).booleanValue()) {
+                                setDefault(comp);
+                        } else {
+                                setNotPresent(comp, this.testDataNotPresent);
+                        }
+                }else if (isInputValid(value, step.getObject()).booleanValue()) {
+                        setDefault(comp);
+                } else {
+                        setNotPresent(comp, this.inValidInput);
+                }
+            } else {
+                    setDefault(comp);
+                    comp.setForeground(Color.lightGray);
+                    comp.setFont(new Font("Default", Font.ITALIC, 11));
+            }
 	}
 
 	private Boolean isOptional(TestStep step) {
@@ -75,14 +75,18 @@ public class InputRenderer extends AbstractRenderer {
 		return (tdModel != null && tdModel.getColumnIndex(column) >= 0);
 	}
 
-	private Boolean isInputValid(Object value) {
+	private Boolean isInputValid(Object value, String objectName) {
 		String val = Objects.toString(value, "").trim();
-                if (val.matches("(@.+)|(=.+)|(%.+%)|(#.+)"))
-		// return Boolean.valueOf(val.matches("(@.+)|(=.+)|(%.+%)"));
-                   return true;
-                else if (val.startsWith("<") || val.startsWith("{") || val.startsWith("["))
-                   return true;
-                else
-                   return false;
+                if (objectName.matches("String Operations")){
+                    return true;
+                } else{
+                    if (val.matches("(@.+)|(=.+)|(%.+%)|(#.+)"))
+                    // return Boolean.valueOf(val.matches("(@.+)|(=.+)|(%.+%)"));
+                       return true;
+                    else if (val.startsWith("<") || val.startsWith("{") || val.startsWith("["))
+                       return true;
+                    else
+                       return false;
+                }
 	}
 }

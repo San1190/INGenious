@@ -662,4 +662,8 @@ public class AppMainFrame extends JFrame {
             }
         }
     }
+    
+    public AppActionListener getsActionListener() {
+        return sActionListener;
+    }
 }

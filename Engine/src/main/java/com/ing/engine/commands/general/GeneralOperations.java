@@ -104,7 +104,7 @@ public class GeneralOperations extends General {
         }
 
         if (getVar(Condition) != null) {
-            Report.updateTestLog("addVar", "Variable " + Condition + " added with value " + Data, Status.DONE);
+            Report.updateTestLog("addVar", "Variable " + Condition + " added with value [" + Data +"]", Status.DONE);
         } else {
             Report.updateTestLog("addVar", "Variable " + Condition + " not added ", Status.DEBUG);
         }
@@ -315,5 +315,90 @@ public class GeneralOperations extends General {
                     Status.DEBUG);
         }
     }
+    
+    /**
+    * Stores data from a previous test case into either a runtime variable or a target datasheet.
+    * <p>
+    * This method retrieves the value from a specified source datasheet column using the context of a previous
+    * test case ({@code %PreviousScenario%}, {@code %PreviousTestCase%}, {@code %PreviousIteration%} and {@code %PreviousSubIteration%}). 
+    * The retrieved value is then stored based on the format of the {@code Input} parameter:
+    * <ul>
+    *     <li>If {@code Input} is a runtime variable (e.g., "%VarName%"), the value is stored in that variable.</li>
+    *     <li>If {@code Input} is a datasheet reference (e.g., "SheetName:ColumnName"), the value is stored in the specified column.</li>
+    * </ul>
+    * <p>
+    * 
+    * After execution, it resets the runtime variables related to the previous test case context.
+    */
+    @Action(object = ObjectType.GENERAL, desc = "Store Data from Previous Test Case Data", input = InputType.YES, condition = InputType.YES)
+    public void storeDataFromPreviousTestCaseData() {
+        if (Input.isBlank()) { 
+            Report.updateTestLog(Action, "Input is required to get the source Datasheet.", Status.FAIL);
+        } else if (Condition.isBlank()) {
+            Report.updateTestLog(Action, "Condition is required for the target Datasheet.", Status.FAIL);
+        } else if (!Input.isBlank() && !Condition.isBlank()){
+            String prevScenarioVar = getRuntimeVar("%PreviousScenario%");
+            String prevTestCaseVar = getRuntimeVar("%PreviousTestCase%");
+            String prevIterationVar = getRuntimeVar("%PreviousIteration%");
+            String prevSubIterationVar = getRuntimeVar("%PreviousSubIteration%");
+            String sourceScenario = prevScenarioVar != null ? prevScenarioVar : userData.getScenario(); 
+            String sourceTestCase = prevTestCaseVar != null ? prevTestCaseVar : userData.getTestCase(); 
+            String sourceIteration = prevIterationVar != null ? prevIterationVar : userData.getIteration(); 
+            String sourceSubIteration = prevSubIterationVar != null ? prevSubIterationVar : userData.getSubIteration();
+            String sourceDataSheet = Condition;
+            String sourceSheetName = sourceDataSheet.split(":",2)[0];
+            String sourceColumnName = sourceDataSheet.split(":",2)[1];
+            String reportDescription = "";
+            String value = userData.getData(sourceSheetName, sourceColumnName, sourceScenario, sourceTestCase,
+              sourceIteration, sourceSubIteration);
 
+            if (Input.matches("%.*%")) { 
+             addVar(Input, value);
+             reportDescription = Input.replaceAll("%", "");
+            } else { 
+                String targetDataSheet = Input;
+                String targetSheetName = targetDataSheet.split(":",2)[0];
+                String targetColumnName = targetDataSheet.split(":",2)[1];
+                reportDescription = targetColumnName;
+                userData.putData(targetSheetName, targetColumnName, value, userData.getScenario(), userData.getTestCase(),
+                userData.getIteration(), userData.getSubIteration());
+            } 
+            Report.updateTestLog(reportDescription, "Value [" + value + "] is successfully stored to [" + Input + "]", Status.DONE);  
+        }
+    }
+    
+    /**
+     * Reset required variables for storeDataFromPreviousTestCaseData action to null 
+     *  <ul>
+     *     <li>{@code %PreviousScenario%}</li>
+     *     <li>{@code %PreviousTestCase%}</li>
+     *     <li>{@code %PreviousIteration%}</li>
+     *     <li>{@code %PreviousSubIteration%}</li>
+     * </ul>
+     */
+    @Action(object = ObjectType.GENERAL, desc = "Rest Required Variables for storeDataFromPreviousTestCaseData action", input = InputType.OPTIONAL)
+    public void resetPreviousTestCaseDataVariables() {
+        // Reset Variables
+        addVar("%PreviousScenario%", null);
+        addVar("%PreviousTestCase%", null);
+        addVar("%PreviousIteration%", null);
+        addVar("%PreviousSubIteration%", null);
+        
+        Report.updateTestLog("resetPreviousTestCaseDataVariables", " Variables %PreviousScenario%, %PreviousTestCase%, %PreviousIteration% and %PreviousSubIteration% has been reset." + Input, Status.DONE);  
+    }
+    
+    @Action(object = ObjectType.GENERAL, desc = "store in Global Datasheet", input = InputType.YES, condition = InputType.YES)
+    public void storeInGlobalDataSheet() {
+        if (Condition != null) {
+
+            String globalDataID = Condition.split(":")[0];
+            String globalcolumnName = Condition.split(":")[1];
+            userData.putGlobalData("#"+globalDataID, globalcolumnName, Data);
+            Report.updateTestLog(Action,
+                    "Global Value: " + Data + " has been stored into " + "the Global data sheet", Status.DONE);
+        } else {
+            Report.updateTestLog(Action, "Incorrect input format", Status.DEBUG);
+            System.out.println("Incorrect input format " + Condition);
+        }
+    }
 }

@@ -1,13 +1,14 @@
-
 package com.ing.datalib.component;
 
 import com.ing.datalib.testdata.TestDataFactory;
 import com.ing.datalib.testdata.model.AbstractDataModel;
 import com.ing.datalib.testdata.model.TestDataModel;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -20,7 +21,7 @@ import java.util.logging.Logger;
 
 /**
  *
- * 
+ *
  */
 public class EnvTestData {
 
@@ -201,11 +202,24 @@ public class EnvTestData {
             testData.save();
         }
         environmentProperties.put("Environment", getEnvironmentsAsString());
-        try (FileOutputStream fout = new FileOutputStream(new File(getPropertiesLocation()));) {
-            environmentProperties.store(fout, "List of Environments in comma seperated order");
+        saveProperties(environmentProperties, getPropertiesLocation());
+    }
+
+    private static void saveProperties(Properties prop, String filename) {
+        File file = new File(filename);
+        try (BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(file), "ISO_8859_1"))) {
+            synchronized (prop) {
+                for (Map.Entry<Object, Object> e : prop.entrySet()) {
+                    String key = (String) e.getKey();
+                    String val = (String) e.getValue();
+                    bw.write(key + "=" + val);
+                    bw.newLine();
+                }
+            }
         } catch (IOException ex) {
             Logger.getLogger(EnvTestData.class.getName()).log(Level.SEVERE, null, ex);
         }
+
     }
 
     private String getEnvironmentsAsString() {

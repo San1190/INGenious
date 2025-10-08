@@ -340,4 +340,8 @@ public class TestStep {
     public Boolean isWebserviceStopStep() {
         return (getObject().equals("Webservice") && getAction().contains("closeConnection"));
     }
+    
+    public Boolean isStringOperationsStep() {
+        return getObject().equals("String Operations");
+    }
 }

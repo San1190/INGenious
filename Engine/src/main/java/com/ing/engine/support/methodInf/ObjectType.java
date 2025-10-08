@@ -17,6 +17,7 @@ public enum ObjectType {
     KAFKA,
     QUEUE,
     DATA,
-    GENERAL
+    GENERAL,
+    STRINGOPERATIONS
     
 }

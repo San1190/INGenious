@@ -15,12 +15,14 @@ import com.ing.ide.main.testar.reporting.HtmlReportPanel;
 import com.ing.ide.main.testar.statemodel.StateModelAnalysis;
 import com.ing.ide.main.googlerecordingjson.JsonParser;
 import com.ing.ide.main.playwrightrecording.PlaywrightRecordingParser;
+import com.ing.ide.main.playwrightrecording.RecordedStepsNameDialogue;
 import com.ing.ide.main.ui.AboutUI;
 import com.ing.ide.main.ui.InjectScript;
 import com.ing.ide.main.ui.NewProject;
 import com.ing.ide.main.ui.Options;
 import com.ing.ide.main.utils.CMProjectCreator;
 import com.ing.ide.main.utils.Utils;
+import com.ing.ide.util.Notification;
 import com.ing.ide.util.logging.UILogger;
 import java.awt.Color;
 import java.awt.event.ActionEvent;
@@ -58,8 +60,6 @@ public class AppActionListener implements ActionListener {
 
     private final ImportTestData importTestData;
     
-    public final PlaywrightRecordingParser playwrightRecordingParser;
-    
     private final AppToolBar appToolBar;
     
     private Timer autoSaveTimer;
@@ -71,7 +71,9 @@ public class AppActionListener implements ActionListener {
     private final StateModelAnalysis stateModelAnalysis;
 
     private final MCPAgentPanel mcpAgentPanel;
-
+    
+    //private static AppActionListener instance;
+    
     public AppActionListener(AppMainFrame sMainFrame, AppToolBar appToolBar) throws IOException {
         this.sMainFrame = sMainFrame;
         this.appToolBar = appToolBar;
@@ -85,12 +87,10 @@ public class AppActionListener implements ActionListener {
         jsonParser = new JsonParser(sMainFrame);
         injectScript = new InjectScript();
         importTestData = new ImportTestData(sMainFrame);
-        playwrightRecordingParser=new PlaywrightRecordingParser(sMainFrame);
         testarPanel = new TESTARPanel(sMainFrame);
         htmlReportPanel = new HtmlReportPanel(sMainFrame);
         stateModelAnalysis = new StateModelAnalysis();
         mcpAgentPanel = new MCPAgentPanel(sMainFrame);
-
     }
 
     @Override
@@ -228,10 +228,39 @@ public class AppActionListener implements ActionListener {
                         Logger.getLogger(AppActionListener.class.getName()).log(Level.SEVERE, null, ex);
                     }
                 } 
-                 break; 
+                 break;
+            case "Import via Playwright Recorder":
+                {
+                    try {
+                        String ScenarioName = RecordedStepsNameDialogue.getScenarioName();
+                        PlaywrightRecordingParser playwrightRecordingParser = new PlaywrightRecordingParser(sMainFrame);
+                        String ProjectLocation = sMainFrame.getProject().getLocation();
+                        sMainFrame.loadProject(ProjectLocation);
+                        File originalFile = new File(ProjectLocation + File.separator + "Recording" + File.separator + "recording.txt");
+                        File renamedFile = new File(ProjectLocation + File.separator + "Recording" + File.separator + ScenarioName + ".txt");
+
+                        if (originalFile.exists()) {
+                            boolean success = originalFile.renameTo(renamedFile);
+                            if (success) {
+                                Notification.show("Recorded steps saved as " + renamedFile.getAbsolutePath());
+                            } else {
+                                Notification.show("Failed to save recorded steps.");
+                            }
+                        } else {
+                            Notification.show("Original file does not exist.");
+                        }
+                        
+                        playwrightRecordingParser.playwrightParser(renamedFile);
+                        sMainFrame.loadProject(ProjectLocation);                                     
+                    } catch (Exception ex) {
+                        Logger.getLogger(AppActionListener.class.getName()).log(Level.SEVERE, null, ex);
+                    }
+                } 
+                 break;
             case "Import Playwright Recording":    
                 {
-                    try {  
+                    try {
+                        PlaywrightRecordingParser playwrightRecordingParser=new PlaywrightRecordingParser(sMainFrame);
                         String ProjectLocation=sMainFrame.getProject().getLocation();
                         sMainFrame.loadProject(ProjectLocation);
                         playwrightRecordingParser.playwrightParser(Utils.openDialog("Playwright Recording File", "txt"));

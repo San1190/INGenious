@@ -9,7 +9,7 @@ import java.util.Properties;
  *
  * 
  */
-public class AbstractPropSettings extends LinkedProperties {
+    public class AbstractPropSettings extends LinkedProperties {
 
     private String location;
 

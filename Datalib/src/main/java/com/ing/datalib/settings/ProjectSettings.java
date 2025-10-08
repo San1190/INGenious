@@ -15,7 +15,8 @@ public class ProjectSettings {
 
     private final UserDefinedSettings userDefinedSettings;
 
-    private final DriverSettings driverSettings;
+    private final DriverProperties driverSettings;
+    // private final DriverSettings driverSettings;
     private final Capabilities capabilities;
     private final Emulators emulators;
     private final TestMgmtModule testMgmtModule;
@@ -24,11 +25,13 @@ public class ProjectSettings {
     private final ExecutionSettings execSettings;   
     private final DBProperties dbSettings;
     private final ContextOptions contextSettings;
+    private final KafkaSSLConfigurations SSLConfigurations;
 
     public ProjectSettings(Project sProject) {
         this.sProject = sProject;
         this.userDefinedSettings = new UserDefinedSettings(getLocation());
-        this.driverSettings = new DriverSettings(getLocation());
+        // this.driverSettings = new DriverSettings(getLocation());
+        this.driverSettings = new DriverProperties(getLocation());
         this.capabilities = new Capabilities(getLocation());
         this.emulators = new Emulators(getLocation());
         this.testMgmtModule = new TestMgmtModule(getLocation());
@@ -37,10 +40,12 @@ public class ProjectSettings {
         this.rpSettings = new ReportPortalSettings(getLocation());
         this.extentSettings = new ExtentReportSettings(getLocation());
         this.contextSettings = new ContextOptions(getLocation());
+        this.SSLConfigurations = new KafkaSSLConfigurations(getLocation());
     }
 
     public void resetLocation() {
         userDefinedSettings.setLocation(getLocation());
+        // driverSettings.setLocation(getLocation());
         driverSettings.setLocation(getLocation());
         capabilities.setLocation(getLocation());
         emulators.setLocation(getLocation());
@@ -72,12 +77,16 @@ public class ProjectSettings {
     public ExtentReportSettings getExtentSettings(){
         return extentSettings;
     }
+    
+    public KafkaSSLConfigurations getKafkaSSLConfigurations(){
+        return SSLConfigurations;
+    }
 
     public ContextOptions getContextSettings(){
         return contextSettings;
     }
     
-    public DriverSettings getDriverSettings() {
+    public DriverProperties getDriverSettings() {
         return driverSettings;
     }
 
@@ -115,5 +124,6 @@ public class ProjectSettings {
         dbSettings.save();
         extentSettings.save();
         contextSettings.save();
+        SSLConfigurations.save();
     }
 }

@@ -253,6 +253,7 @@ public class HtmlTestCaseHandler extends TestCaseHandler implements PrimaryHandl
                 onSetpFailed();
                 break;
             case COMPLETE:
+                onSetpPassed();
                 break;
 
         }

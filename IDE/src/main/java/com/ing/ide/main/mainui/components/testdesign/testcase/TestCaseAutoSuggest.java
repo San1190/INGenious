@@ -20,8 +20,11 @@ import com.ing.engine.util.data.fx.FParser;
 import com.ing.ide.main.utils.table.SQLTextArea;
 import com.ing.ide.main.utils.table.WebservicePayloadArea;
 import com.ing.ide.main.utils.table.EndPointTextArea;
+import com.ing.ide.main.utils.table.StringOperationsPayloadArea;
 import com.ing.ide.main.utils.table.autosuggest.AutoSuggest;
+import com.ing.ide.main.utils.table.autosuggest.InputMainAutoSuggest;
 import com.ing.ide.main.utils.table.autosuggest.AutoSuggestCellEditor;
+import com.ing.ide.main.utils.table.autosuggest.InputAutoSuggestCellEditor;
 import com.ing.ide.main.utils.table.autosuggest.ComboSeparatorsRenderer;
 import java.awt.Point;
 import java.awt.Rectangle;
@@ -85,6 +88,17 @@ public class TestCaseAutoSuggest {
                 .withOnHide(stopEditingOnFocusLost());
     }
 
+    private boolean isStringOpsEditor(){
+        int row = table.getSelectedRow();
+        String value = "";
+        if(row >= 0)
+            value = table.getModel().getValueAt(row, 1).toString();
+        if(!value.matches("String Operations"))
+            return false;
+        
+        return true;     
+    }
+    
     private Action stopEditingOnFocusLost() {
         return new AbstractAction() {
             @Override
@@ -101,7 +115,7 @@ public class TestCaseAutoSuggest {
         table.getColumnModel().getColumn(ObjectName.getIndex()).setCellEditor(new AutoSuggestCellEditor(objAutoSuggest));
         table.getColumnModel().getColumn(Action.getIndex()).setCellEditor(new AutoSuggestCellEditor(actionAutoSuggest));
         table.getColumnModel().getColumn(Condition.getIndex()).setCellEditor(new AutoSuggestCellEditor(conditionAutoSuggest));
-        table.getColumnModel().getColumn(Input.getIndex()).setCellEditor(new AutoSuggestCellEditor(inputAutoSuggest));
+        table.getColumnModel().getColumn(Input.getIndex()).setCellEditor(new InputAutoSuggestCellEditor(inputAutoSuggest));
     }
 
     private List<String> getObjectList() {
@@ -116,6 +130,7 @@ public class TestCaseAutoSuggest {
         objectList.add("File");
         objectList.add("General");
         objectList.add("Execute");
+        objectList.add("String Operations");
         return objectList;
     }
 
@@ -136,6 +151,15 @@ public class TestCaseAutoSuggest {
         }
         return newList;
     }
+    
+    public List<String> getAPIAliasList() {
+        List<String> values = sProject.getProjectSettings().getDriverSettings().getAPIList();
+        List<String> newList = new ArrayList<>();
+        for (String string : values) {
+            newList.add("#"+string);
+        }
+        return newList;
+    }
 
 
     private void startEditing(final AutoSuggest suggest) {
@@ -144,9 +168,31 @@ public class TestCaseAutoSuggest {
             public void run() {
                 if (!table.isEditing()) {
                     table.editCellAt(table.getSelectedRow(), table.getSelectedColumn());
-                    suggest.getTextField().setText(suggest.getText() + ":");
-                    suggest.getTextField().requestFocusInWindow();
-                    suggest.updateList();
+                    
+                    boolean isStringOpsEditor = isStringOpsEditor();
+                    if(!isStringOpsEditor){
+                        suggest.getTextField().setText(suggest.getText() + ":");
+                        suggest.getTextField().requestFocusInWindow();
+                        suggest.updateList();
+                    }
+                }
+            }
+        });
+    }
+    
+    private void startEditing(final InputMainAutoSuggest suggest) {
+        SwingUtilities.invokeLater(new Runnable() {
+            @Override
+            public void run() {
+                if (!table.isEditing()) {
+                    table.editCellAt(table.getSelectedRow(), table.getSelectedColumn());
+                    
+                    boolean isStringOpsEditor = isStringOpsEditor();
+                    if(!isStringOpsEditor){
+                        suggest.getTextField().setText(suggest.getText() + ":");
+                        suggest.getTextField().requestFocusInWindow();
+                        suggest.updateList();
+                    }
                 }
             }
         });
@@ -208,10 +254,21 @@ public class TestCaseAutoSuggest {
         return step != null && step.isBrowserStep()
                 && step.getAction().contains("RouteFulfillSetBody");
     }
+    
+    private boolean isStringOperationsStep(TestStep step) {
+        return step != null && step.isStringOperationsStep();
+    }
 
     class ConditionAutoSuggest extends AutoSuggest {
         private List<String> getConditionBasedOnText(String value) {
-            return getContextAliasList();
+            String objectName = Objects.toString(table.getValueAt(
+                    table.getSelectedRow(), ObjectName.getIndex()), "");
+            if ("Webservice".equals(objectName)){
+                return getAPIAliasList();
+            } else {
+                return getContextAliasList();
+            }
+            
         }
  
         @Override
@@ -269,6 +326,8 @@ public class TestCaseAutoSuggest {
                     return MethodInfoManager.getMethodListFor(ObjectType.FILE, ObjectType.FILE);
                 case "General":
                     return MethodInfoManager.getMethodListFor(ObjectType.GENERAL, ObjectType.GENERAL);    
+                case "String Operations":
+                    return MethodInfoManager.getMethodListFor(ObjectType.STRINGOPERATIONS, ObjectType.STRINGOPERATIONS);  
                 default:
                      if (isWebObject(objectName, pageName)) {
                         return MethodInfoManager.getMethodListFor(ObjectType.PLAYWRIGHT, ObjectType.WEB, ObjectType.ANY);
@@ -318,11 +377,15 @@ public class TestCaseAutoSuggest {
 
     }
 
-    class InputAutoSuggest extends AutoSuggest {
+    class InputAutoSuggest extends InputMainAutoSuggest {
 
         Boolean isPending = false;
 
         private String prevText;
+        
+        public InputAutoSuggest(){
+            super.setTable(TestCaseAutoSuggest.this.table); 
+        }
 
         private List<String> getInputBasedOnText(String value) {
             if (value.startsWith("%")) {
@@ -397,11 +460,15 @@ public class TestCaseAutoSuggest {
 
         @Override
         public void setSelectedItem(Object o) {
+            
+            boolean isStringOpsEditor = isStringOpsEditor();
             if (o != null
                     && !o.toString().matches("(@.+)|(=.+)|(%.+%)")
                     && !o.toString().contains(":")) {
-                if (isPending && prevText != null) {
+                if (isPending && prevText != null && !isStringOpsEditor) {
                     o = prevText + ":" + o.toString();
+                } else if (isPending && prevText != null && isStringOpsEditor)  {
+                    o = prevText + o.toString();
                 }
             }
             super.setSelectedItem(o);
@@ -494,6 +561,9 @@ public class TestCaseAutoSuggest {
                     if ((isRouteFulfillEndpointStep(step) && isInputclicked)) {
                         new EndPointTextArea(null, step, getInputs());
                     }
+                    if ((isStringOperationsStep(step) && isInputclicked)) {
+                        new StringOperationsPayloadArea(null, step, getInputs());
+                    }
                 }
             }
         }
@@ -513,16 +583,19 @@ public class TestCaseAutoSuggest {
         Timer showTimerw;
         Timer showTimerf;
         Timer showTimerm;
+        Timer showTimers;
         Timer disposeTimerp;
         Timer disposeTimerd;
         Timer disposeTimerw;
         Timer disposeTimerf;
         Timer disposeTimerm;
+        Timer disposeTimers;
         JPopupMenu popupp;
         JPopupMenu popupd;
         JPopupMenu popupw;
         JPopupMenu popupf;
         JPopupMenu popupm;
+        JPopupMenu popups;
 
         TestStep step;
 
@@ -532,17 +605,20 @@ public class TestCaseAutoSuggest {
             popupw = new JPopupMenu();
             popupf = new JPopupMenu();
             popupm = new JPopupMenu();
+            popups = new JPopupMenu();
             final JMenuItem jMenuItemp = new JMenuItem("Click to open ProtractorJS command editor");
             final JMenuItem jMenuItemd = new JMenuItem("Click to Open SQL Query Editor ");
             final JMenuItem jMenuItemw = new JMenuItem("Click to Open Webservice Editor ");
             final JMenuItem jMenuItemf = new JMenuItem("Click to Open File Editor ");
             final JMenuItem jMenuItemm = new JMenuItem("Click to Open Message Editor ");
+            final JMenuItem jMenuItems = new JMenuItem("Click to Open String Operations Editor ");
 
             popupp.add(jMenuItemp);
             popupd.add(jMenuItemd);
             popupw.add(jMenuItemw);
             popupf.add(jMenuItemf);
             popupm.add(jMenuItemm);
+            popups.add(jMenuItems);
 
             jMenuItemp.addActionListener((ActionEvent ae) -> {
                 if (step != null && (isProtractorjsStep(step))) {
@@ -582,6 +658,12 @@ public class TestCaseAutoSuggest {
             jMenuItemm.addActionListener((ActionEvent ae) -> {
                 if (step != null && (isMessageStep(step))) {
                     new WebservicePayloadArea(null, step, "SOAP", getInputs());
+                }
+            });
+            
+            jMenuItems.addActionListener((ActionEvent ae) -> {
+                if (step != null && (isStringOperationsStep(step))) {
+                    new StringOperationsPayloadArea(null, step, getInputs());
                 }
             });
 
@@ -694,6 +776,28 @@ public class TestCaseAutoSuggest {
             disposeTimerm.setRepeats(false);
             disposeTimerm.setCoalesce(true);
             
+            //Timer s
+            showTimers = new Timer(1000, (ActionEvent ae) -> {
+                if (hintCell != null) {
+                    disposeTimers.stop();
+                    popups.setVisible(false);
+
+                    Rectangle bounds = table.getCellRect(hintCell.y, hintCell.x, true);
+                    int x = bounds.x;
+                    int y = bounds.y + bounds.height;
+                    popups.show(table, x, y);
+                    disposeTimerf.start();
+                }
+            });
+            showTimers.setRepeats(false);
+            showTimers.setCoalesce(true);
+
+            disposeTimers = new Timer(2000, (ActionEvent ae) -> {
+                popups.setVisible(false);
+            });
+            disposeTimers.setRepeats(false);
+            disposeTimers.setCoalesce(true);
+            
 
         }
 
@@ -747,15 +851,20 @@ public class TestCaseAutoSuggest {
                         hintCell = new Point(col, row);
                         showTimerm.restart();
                     }
-                    
-                }else {
+                } else if ((isStringOperationsStep(step) && col == Input.getIndex())) {
+                    if (hintCell == null || (hintCell.x != col || hintCell.y != row)) {
+                        hintCell = new Point(col, row);
+                        showTimers.restart();
+                    }
+                } else {
                     hintCell = null;
-                    if (popupp.isVisible() || popupd.isVisible() || popupw.isVisible() || popupf.isVisible()|| popupm.isVisible()) {
+                    if (popupp.isVisible() || popupd.isVisible() || popupw.isVisible() || popupf.isVisible()|| popupm.isVisible()|| popups.isVisible()) {
                         popupp.setVisible(false);
                         popupd.setVisible(false);
                         popupw.setVisible(false);
                         popupf.setVisible(false);
                         popupm.setVisible(false);
+                        popups.setVisible(false);
                     }
 
                 }

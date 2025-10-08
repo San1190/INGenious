@@ -1,5 +1,6 @@
 package com.ing.engine.commands.webservice;
 
+import com.ing.datalib.settings.DriverProperties;
 import com.ing.engine.commands.browser.General;
 import com.ing.engine.constants.FilePath;
 import com.ing.engine.core.CommandControl;
@@ -23,6 +24,7 @@ import javax.xml.xpath.XPath;
 import javax.xml.xpath.XPathConstants;
 import javax.xml.xpath.XPathFactory;
 import com.jayway.jsonpath.*;
+import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.List;
@@ -37,6 +39,9 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.BodyPublisher;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.KeyStore;
 import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
@@ -46,8 +51,11 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import javax.net.ssl.KeyManager;
+import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
+import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.xpath.XPathExpressionException;
@@ -414,6 +422,17 @@ public class Webservice extends General {
     @Action(object = ObjectType.WEBSERVICE, desc = "Set End Point ", input = InputType.YES, condition = InputType.OPTIONAL)
     public void setEndPoint() {
         try {
+            String apiConfigName = Condition;
+            DriverProperties driverProperties = Control.getCurrentProject().getProjectSettings().getDriverSettings();
+            if (apiConfigName.startsWith("#")) {
+                apiConfigName = apiConfigName.replace("#", "");
+            } else {
+                apiConfigName = ""; //This means that the Condtion is not an API Config Alias
+            }
+
+            String configToLoad = driverProperties.doesAPIconfigExist(apiConfigName) ? apiConfigName : "default";
+            driverProperties.setCurrLoadedAPIConfig(configToLoad);
+            
             String resource = handlePayloadorEndpoint(Data);
             endPoints.put(key, resource);
             httpAgentCheck();
@@ -608,6 +627,18 @@ public class Webservice extends General {
                 }
             }
 
+            Pattern pattern = Pattern.compile("%\\w+%");
+            Matcher matcher = pattern.matcher(Data);
+
+            while (matcher.find()) {
+                String variable = matcher.group();
+                if (getVar(variable) != null) {
+                    Data = Data.replaceAll(variable, getVar(variable));
+                } else {
+                    Report.updateTestLog(Action, "Variable " + variable + " not found", Status.DEBUG);
+                }
+            }
+
             if (headers.containsKey(key)) {
                 headers.get(key).add(Data);
             } else {
@@ -615,8 +646,8 @@ public class Webservice extends General {
                 toBeAdded.add(Data);
                 headers.put(key, toBeAdded);
             }
-
-            Report.updateTestLog(Action, "Header added " + Data, Status.DONE);
+            
+            Report.updateTestLog(Action, "Header added [" + Data + "]", Status.DONE);
         } catch (Exception ex) {
             Logger.getLogger(this.getClass().getName()).log(Level.OFF, null, ex);
             Report.updateTestLog(Action, "Error adding Header :" + "\n" + ex.getMessage(), Status.DEBUG);
@@ -690,13 +721,13 @@ public class Webservice extends General {
             Report.updateTestLog(Action, "Error closing connection :" + "\n" + ex.getMessage(), Status.DEBUG);
         }
     }
-
+    
     private ProxySelector getProxyDetails() {
         if (Control.getCurrentProject().getProjectSettings().getDriverSettings().useProxy()) {
             String proxyhost = Control.getCurrentProject().getProjectSettings().getDriverSettings()
-                    .getProperty("proxyHost");
+                    .getProxyHost().replaceFirst("^(http://|https://)", "");
             String proxyport = Control.getCurrentProject().getProjectSettings().getDriverSettings()
-                    .getProperty("proxyPort");
+                    .getProxyPort();
             ProxySelector proxySelector = ProxySelector.of(new InetSocketAddress(proxyhost, Integer.parseInt(proxyport)));
             return proxySelector;
         } else {
@@ -793,11 +824,50 @@ public class Webservice extends General {
         }
     }
 
-    private void setRequestMethod(String method, String payload) {
+    private boolean isMultiPart() {
+        if (headers.containsKey(key)) {
+            ArrayList<String> headerlist = headers.get(key);
+            if (headerlist.size() > 0) {
+                for (String header : headerlist) {
+                    if (header.split("=")[1].contains("multipart")) {
+                        return true;
+                    }
+                };
+            }
+        }
+        return false;
+    }
+
+    private void setRequestMethod(String method, String payload) throws IOException {
+        BodyPublisher payloadBody = null;
         if (isformUrlencoded()) {
             payload = urlencodedParams();
         }
-        BodyPublisher payloadBody = HttpRequest.BodyPublishers.ofString(payload);
+        if (isMultiPart()) {
+            Path filePath = Path.of(getVar("%filePath%"));
+            filePath = Path.of(Control.getCurrentProject().getLocation() + "/" + filePath);
+            String mimeType = Files.probeContentType(filePath);
+            System.out.println("Path of the file === " + filePath);
+            String boundary = "Boundary-" + System.currentTimeMillis();
+            String fileName = filePath.getFileName().toString();
+
+            /* String body = "--" + boundary.getBytes(StandardCharsets.UTF_8)+ "\r\n"
+                    + "Content-Disposition: form-data; name=\"file\"; filename=\"" + fileName + "\"\r\n"
+                    + "Content-Type: " + mimeType // Set Content-Type to text/csv
+                    + Files.readString(filePath, StandardCharsets.UTF_8) + "\r\n"
+                    + ("--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8);*/
+            var byteArrays = new ArrayList<byte[]>();
+            byteArrays.add(("--" + boundary + "\r\n").getBytes(StandardCharsets.UTF_8));
+            byteArrays.add(("Content-Disposition: form-data; name=\"file\"; filename=\"" + fileName + "\"\r\n").getBytes(StandardCharsets.UTF_8));
+            byteArrays.add(("Content-Type: " + mimeType + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+            byteArrays.add(Files.readAllBytes(filePath));
+            byteArrays.add(("\r\n--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
+
+            payloadBody = HttpRequest.BodyPublishers.ofByteArrays(byteArrays);
+            httpRequestBuilder.put(key, httpRequestBuilder.get(key).setHeader("Content-Type", "multipart/form-data; boundary=" + boundary));
+        } else {
+            payloadBody = HttpRequest.BodyPublishers.ofString(payload);
+        }
         try {
             switch (method) {
                 case "POST": {
@@ -837,7 +907,7 @@ public class Webservice extends General {
         }
     }
 
-    private void setRequestMethod(RequestMethod requestmethod) throws FileNotFoundException {
+    private void setRequestMethod(RequestMethod requestmethod) throws FileNotFoundException, IOException {
         if (requestmethod.toString().equals("PUT") || requestmethod.toString().equals("POST") || requestmethod.toString().equals("PATCH") || requestmethod.toString().equals("DELETEWITHPAYLOAD")) {
 
             setRequestMethod(requestmethod.toString(), handlePayloadorEndpoint(Data));
@@ -959,20 +1029,46 @@ public class Webservice extends General {
         }
     }};
 
+    private KeyManager[] loadKeyStore() {
+        String keystorePath = Control.getCurrentProject().getProjectSettings().getDriverSettings().getProperty("keyStorePath");
+        String keystorePassword = Control.getCurrentProject().getProjectSettings().getDriverSettings().getProperty("keyStorePassword");
+        KeyStore keyStore;
+        KeyManagerFactory kmf = null;
+        try {
+            keyStore = KeyStore.getInstance("JKS");
+            keyStore.load(new FileInputStream(keystorePath), keystorePassword.toCharArray());
+            kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+            kmf.init(keyStore, keystorePassword.toCharArray());
+            TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+            tmf.init(keyStore);
+        } catch (Exception ex) {
+            Logger.getLogger(this.getClass().getName()).log(Level.OFF, ex.getMessage(), ex);
+        }
+        return kmf.getKeyManagers();
+    }
+
     private void sslCertificateVerification() {
         try {
             if (!isSSLCertificateVerification()) {
                 SSLContext sc = SSLContext.getInstance("TLS");
-                sc.init(null, trustAllCerts, new SecureRandom());
-                httpClientBuilder.put(key, httpClientBuilder.get(key).sslContext(sc));
+                if (isSelfSigned()) {
+                    sc.init(loadKeyStore(), trustAllCerts, new SecureRandom());
+                } else {
+                    sc.init(null, trustAllCerts, new SecureRandom());
+                }
+                httpClientBuilder.put(key, httpClientBuilder.get(key)).sslContext(sc);
             }
         } catch (Exception ex) {
             Logger.getLogger(this.getClass().getName()).log(Level.OFF, ex.getMessage(), ex);
         }
     }
-    
+
     private Boolean isSSLCertificateVerification() {
         return Control.getCurrentProject().getProjectSettings().getDriverSettings().sslCertificateVerification();
+    }
+
+    private Boolean isSelfSigned() {
+        return Control.getCurrentProject().getProjectSettings().getDriverSettings().selfSigned();
     }
 
 }

@@ -42,13 +42,14 @@ public class TestDesign {
     private CardLayout testCaseScenarioCard;
 
     private final ImpactUI impactUI;
+    
 
     public TestDesign(AppMainFrame sMainFrame) {
         this.sMainFrame = sMainFrame;
         projectTree = new ProjectTree(this);
         reusableTree = new ReusableTree(this);
         scenarioComp = new ScenarioComponent(this);
-        testcaseComp = new TestCaseComponent(this);
+        testcaseComp = new TestCaseComponent(this, this.sMainFrame);
         testDataComp = new TestDataComponent(this);
         objectRepo = new ObjectRepo(this);
         testcaseMirage = new JPanel();

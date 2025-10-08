@@ -32,13 +32,16 @@ import javax.jms.JMSConsumer;
 import javax.jms.JMSContext;
 import javax.jms.JMSProducer;
 import javax.jms.TextMessage;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WebElement;
+
+import org.apache.kafka.common.header.Header;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.WebElement;
-import org.apache.kafka.common.header.Header;
 
 public class Command {
 
@@ -136,7 +139,7 @@ public class Command {
     
     
     /**
-     * *** Kafka ****
+     * *** Kafka Parameters ****
      */
     
     static public Map<String, List<Header>> kafkaHeaders = new HashMap<>();
@@ -150,22 +153,33 @@ public class Command {
     static public Map<String, String> kafkaKey = new HashMap<>();
     static public Map<String, String> kafkaKeySerializer = new HashMap<>();
     static public Map<String, String> kafkaKeyDeserializer = new HashMap<>();
-    static public Map<String, String> kafkaValue = new HashMap<>();
+    static public Map<String, Object> kafkaValue = new HashMap<>();
     static public Map<String, String> kafkaValueSerializer = new HashMap<>();
     static public Map<String, String> kafkaValueDeserializer = new HashMap<>();
+    static public Map<String, Integer> kafkaConsumerPollRetries = new HashMap<>();
+    static public Map<String, Long> kafkaConsumerPollDuration = new HashMap<>();   
+    static public Map<String, Schema> kafkaAvroSchema =new HashMap<>();
+    static public Map<String, ProducerRecord<String, GenericRecord>> kafkaGenericRecord =new HashMap<>();
+    static public Map<String, GenericRecord> kafkaGenericRecordValue =new HashMap<>();
+    static public Map<String, KafkaProducer<String, GenericRecord>> kafkaAvroProducer =new HashMap<>();
+    static public Map<String, ArrayList<String>> kafkaConfigs = new HashMap<>();
+    static public Map<String, Properties> kafkaProducersslConfigs = new HashMap<>();
+    static public Map<String, Properties> kafkaConsumersslConfigs = new HashMap<>();
+    static public Map<String, String> kafkaAvroCompatibleMessage = new HashMap<>();
+    static public Map<String, String> kafkaConsumeRecordCount = new HashMap<>();
+    static public Map<String, String> kafkaConsumeRecordValue = new HashMap<>();
+    static public Map<String, String> kafkaSharedSecret = new HashMap<>();
+    static public Map<String, List<ConsumerRecord<String, Object>>> kafkaConsumerRecords = new HashMap<>();
+    static public Map<String, ConsumerRecord<String, Object>> kafkaConsumerPollRecord = new HashMap<>();
+    static public Map<String, String> kafkaRecordIdentifierValue = new HashMap<>();
+    static public Map<String, String> kafkaRecordIdentifierPath = new HashMap<>();
+    static public Map<String, Integer> kafkaConsumerMaxPollRecords = new HashMap<>();
+    static public Map<String, Boolean> kafkaAutoRegisterSchemas = new HashMap<>();
     static public Map<String, ProducerRecord> kafkaProducerRecord = new HashMap<>();
     static public Map<String, ConsumerRecord> kafkaConsumerRecord = new HashMap<>();
     static public Map<String, KafkaProducer> kafkaProducer = new HashMap<>();
-    static public Map<String, KafkaConsumer> kafkaConsumer = new HashMap<>();
-    static public Map<String, Integer> kafkaConsumerPollRetries = new HashMap<>();
-    static public Map<String, Long> kafkaConsumerPollDuration = new HashMap<>();
-    
-    
-    /**
-     * **********
-     */
-    
-    
+    static public Map<String, KafkaConsumer> kafkaConsumer = new HashMap<>();       
+
     public Command(CommandControl cc) {
         Commander = cc;
         if (Commander.webDriver != null) {
@@ -212,6 +226,10 @@ public class Command {
     public void addVar(String key, String val) {
         Commander.addVar(key, val);
     }
+    
+    public String getRuntimeVar(String key) {
+        return Commander.getRuntimeVar(key);
+    }
 
     public String getVar(String key) {
         return Commander.getVar(key);
@@ -228,10 +246,14 @@ public class Command {
         return Commander.getUserDefinedData(key);
     }
 
+    public String getDatasheet(String key){
+        return Commander.getDatasheet(key);
+    }
+    
     public Properties getDataBaseData(String val) {
         return Commander.getDataBaseProperty(val);
     }
-
+    
     public File getDBFile(String val) {
         return new File(Commander.getDBFile(val));
     }
@@ -302,6 +324,10 @@ public class Command {
 
     public boolean browserAction() {
         return "browser".equalsIgnoreCase(ObjectName);
+    }
+    
+    public String resolveAllRuntimeVars(String str){
+        return Commander.resolveAllRuntimeVars(str);
     }
 
     /**

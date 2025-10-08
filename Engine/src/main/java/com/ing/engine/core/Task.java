@@ -24,6 +24,7 @@ import java.util.logging.Logger;
 
 import com.ing.engine.drivers.WebDriverCreation;
 import java.util.Locale;
+import org.openqa.selenium.JavascriptExecutor;
 
 public class Task implements Runnable {
 
@@ -159,6 +160,14 @@ public class Task implements Runnable {
               closePlaywrightDriver();
             }
             else {
+                    if (webDriver.isLambdaTestExecutionPlatform()) {
+                    JavascriptExecutor js = (JavascriptExecutor) webDriver.driver;
+                    if (report.finalizeReport().toString().equalsIgnoreCase("PASS")) {
+                        js.executeScript("lambda-status=passed");
+                    } else {
+                        js.executeScript("lambda-status=failed");
+                    }
+                }
                 closeWebDriver();
             }
                 

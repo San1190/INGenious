@@ -114,7 +114,7 @@ public class Scroll extends MobileGeneral {
     @Action(object = ObjectType.MOBILE, desc ="Scroll to Text in Android", input = InputType.YES)
     public void scrollInAndroid() {
         try {
-            mDriver.findElement(AppiumBy.androidUIAutomator("new UiScrollable(new UiSelector().scrollable(true)).scrollIntoView(new UiSelector().text(\"" + Data + "\"))"));
+            mDriver.findElement(AppiumBy.androidUIAutomator("new UiScrollable(new UiSelector().scrollable(true)).scrollIntoView(new UiSelector().text(\"" + Data + "\").instance(0))"));
             Report.updateTestLog(Action, "Scrolled to '" + Data + "'", Status.DONE);
         } catch (Exception e) {
             Logger.getLogger(this.getClass().getName()).log(Level.OFF, null, e);

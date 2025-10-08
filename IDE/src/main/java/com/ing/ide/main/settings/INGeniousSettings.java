@@ -68,7 +68,9 @@ public class INGeniousSettings extends javax.swing.JFrame {
     private XTablePanel extentSettingsPanel;
 
     private XTablePanel uDPanel;
-
+    
+    private XTablePanel KafkaSSLConfigsPanel;
+    
     private ConnectButton mailConnect;
 
     private ConnectButton dbConnect;
@@ -92,6 +94,10 @@ public class INGeniousSettings extends javax.swing.JFrame {
         //runSettingsTab.addTab("Report Portal Settings", rpSettingsPanel);
         extentSettingsPanel = new XTablePanel(true);
         runSettingsTab.addTab("Extent Report Settings", extentSettingsPanel);
+        
+        //Added for Kafka SSL certificate settings
+        KafkaSSLConfigsPanel = new XTablePanel(true);
+        runSettingsTab.addTab("Kafka ssl Configurations", KafkaSSLConfigsPanel);
         
         
         mailConnect = new ConnectButton() {
@@ -165,6 +171,7 @@ public class INGeniousSettings extends javax.swing.JFrame {
         loadTestSetTMSettings();
         loadRPSettings();
         loadExtentSettings();
+        loadKafkaSSLConfigurations();
         showSettings();
     }
 
@@ -190,6 +197,7 @@ public class INGeniousSettings extends javax.swing.JFrame {
                 .getUserDefinedSettings(), uDPanel.table);
         loadRPSettings();
         loadExtentSettings();
+        loadKafkaSSLConfigurations();
     }
 
     private void loadRunSettings() {
@@ -288,7 +296,13 @@ public class INGeniousSettings extends javax.swing.JFrame {
                 sProject.getProjectSettings().getExtentSettings(),
                 extentSettingsPanel.table);
     }
-
+    
+        private void loadKafkaSSLConfigurations() {
+        PropUtils.loadPropertiesInTable(
+                sProject.getProjectSettings().getKafkaSSLConfigurations(),
+                KafkaSSLConfigsPanel.table);
+    }
+        
     private void setButtonModelFromText(String text, ButtonGroup Bgroup) {
         for (Enumeration<AbstractButton> buttons = Bgroup.getElements(); buttons.hasMoreElements();) {
             AbstractButton button = buttons.nextElement();
@@ -400,8 +414,15 @@ public class INGeniousSettings extends javax.swing.JFrame {
         sProject.getProjectSettings().getExtentSettings().set(properties);
         sProject.getProjectSettings().getExtentSettings().save();
     }
-
     
+        private void saveKafkaSSLConfigurations() {
+//        Properties properties = encryptpassword(PropUtils.getPropertiesFromTable(((XTablePanel) KafkaSSLConfigsPanel).table), " Enc");
+       Properties properties = PropUtils.getPropertiesFromTable( KafkaSSLConfigsPanel.table);       
+//        PropUtils.loadPropertiesInTable(properties, KafkaSSLConfigsPanel.table, "");
+        sProject.getProjectSettings().getKafkaSSLConfigurations().set(properties);
+        sProject.getProjectSettings().getKafkaSSLConfigurations().save();
+    }
+        
     public void saveAll() {
         saveRunSettings();
         saveTestSetTMSettings();
@@ -409,6 +430,7 @@ public class INGeniousSettings extends javax.swing.JFrame {
         saveuserDefinedSettings();
         saveRPSettings();
         saveExtentSettings();
+        saveKafkaSSLConfigurations();
     }
 
     private void loadTMTestSetSettings(String module) {

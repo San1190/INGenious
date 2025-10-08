@@ -119,7 +119,11 @@ public class ActionRenderer extends AbstractRenderer {
             case "General":
                 valid = MethodInfoManager.getMethodListFor(ObjectType.GENERAL)
                         .contains(action);
-                break;    
+                break;   
+            case "String Operations":
+                valid = MethodInfoManager.getMethodListFor(ObjectType.STRINGOPERATIONS)
+                        .contains(action);
+                break;   
             default:
                 if (isWebObject(step)) {
                     valid = MethodInfoManager.getMethodListFor(ObjectType.PLAYWRIGHT, ObjectType.WEB).contains(action);

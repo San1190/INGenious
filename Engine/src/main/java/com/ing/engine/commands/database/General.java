@@ -1,6 +1,7 @@
 package com.ing.engine.commands.database;
 
 import com.google.common.base.Objects;
+import com.ing.datalib.settings.UserDefinedSettings;
 import com.ing.datalib.util.data.LinkedProperties;
 import com.ing.engine.commands.browser.Command;
 import com.ing.engine.core.CommandControl;
@@ -45,19 +46,22 @@ public class General extends Command {
     public boolean verifyDbConnection(String dbName) throws ClassNotFoundException, SQLException {
         if (getDBFile(dbName).exists()) {
             Properties dbDetails = getDBDetails(dbName);
-
-            String dbDriver = dbDetails.getProperty(DB_DRIVER);
-            String dbConnectionString = dbDetails.getProperty(DB_CONN_STR);
-            String dbUser = dbDetails.getProperty(DB_USER);
-            String dbPass = dbDetails.getProperty(DB_PWD);
+            
+            String dbDriver             = resolveAllVariables(dbDetails.getProperty(DB_DRIVER));
+            String dbConnectionString   = resolveAllVariables(dbDetails.getProperty(DB_CONN_STR));
+            String dbUser               = resolveAllVariables(dbDetails.getProperty(DB_USER));
+            String dbPass               = resolveAllVariables(dbDetails.getProperty(DB_PWD));
+            String dbCommitStr          = resolveAllVariables(dbDetails.getProperty(DB_COMMIT));
+            String dbTimeoutStr         = resolveAllVariables(dbDetails.getProperty(DB_TIME_OUT));
+            
             if (dbPass.endsWith(" Enc")) {
                 dbPass = dbPass.substring(0, dbPass.lastIndexOf(" Enc"));
                 byte[] valueDecoded = Encryption.getInstance().decrypt(dbPass).getBytes();
                 dbPass = new String(valueDecoded);
             }
-            Boolean dbCommit = Boolean.valueOf(dbDetails.getProperty(DB_COMMIT));
-            int dbTimeout=Integer.parseInt(dbDetails.getProperty(DB_TIME_OUT));
-
+            
+            Boolean dbCommit = Boolean.valueOf(dbCommitStr);
+            int dbTimeout = Integer.parseInt(dbTimeoutStr);
 
             if (dbDriver != null) {
                 Class.forName(dbDriver);
@@ -73,6 +77,22 @@ public class General extends Command {
             return false;
         }
         return false;
+    } 
+
+    /**
+     * Detects and resolves all variables in the input string, including datasheet variables,
+     * user-defined variables, and runtime variables.
+     *
+     * <p>If no variables are present, the original string is returned unchanged.</p>
+     *
+     * @param str the input string to evaluate; may or may not contain variables
+     * @return a string with all detected variables replaced by their corresponding values,
+     *         or the original string if none are found
+     */
+    private String resolveAllVariables(String str) {
+        str=handleDataSheetVariables(str);
+        str=resolveAllRuntimeVars(str);
+        return str;
     }
 
     public void executeSelect() throws SQLException {

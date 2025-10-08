@@ -1,6 +1,10 @@
 
 package com.ing.datalib.settings;
 
+//# Deprecated as of Sept 2025
+//# Reason: Replaced by new DriverProperties in `Datalib module`
+//# Retained for reference in case rollback is needed
+//# Dev : Renz
 public class DriverSettings extends AbstractPropSettings {
 
     private static String geckoDriverPath, chromeDriverPath;
@@ -17,10 +21,14 @@ public class DriverSettings extends AbstractPropSettings {
     }
 
     private void loadDefault() {
-        setSSLCertVerification(getSSLCertVerification());
+        setSSLCertificateVerification(getSSLCertificateVerification());
         setUseProxy(getUseProxy());
         setProxyHost(getProxyHost());
         setProxyPort(getProxyPort());
+        setSelfSigned(getSelfSigned());
+        setKeyStorePath(getKeyStorePath());
+        setKeyStorePassword(getKeyStorePassword());
+        
     }
 
     private static void setDriverPath() {
@@ -103,17 +111,44 @@ public class DriverSettings extends AbstractPropSettings {
         return getProperty("proxyPort", "");
     }
     
-    public void setSSLCertVerification(String value) {
-        setProperty("setSSLCertVerification", value);
+    public void setSSLCertificateVerification(String value) {
+        setProperty("sslCertificateVerification", value);
     }
 
-    public String getSSLCertVerification() {
-        return getProperty("setSSLCertVerification", "false");
+    public String getSSLCertificateVerification() {
+        return getProperty("sslCertificateVerification", "false");
     }
     
     public Boolean sslCertificateVerification() {
         return Boolean.valueOf(getProperty("sslCertificateVerification", "false"));
+    }  
+    
+    public void setSelfSigned(String value) {
+        setProperty("selfSigned", value);
     }
 
+    public String getSelfSigned() {
+        return getProperty("selfSigned", "false");
+    }
+    
+    public Boolean selfSigned() {
+        return Boolean.valueOf(getProperty("selfSigned", "false"));
+    }  
+    
+    public void setKeyStorePath(String path) {
+        setProperty("keyStorePath", path);
+    }
+     
+    public String getKeyStorePath() {
+        return getProperty("keyStorePath", "");
+    }
+
+    public void setKeyStorePassword(String value) {
+        setProperty("keyStorePassword", value);
+    }
+     
+    public String getKeyStorePassword() {
+        return getProperty("keyStorePassword", "");
+    }
 
 }

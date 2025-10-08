@@ -7,6 +7,7 @@ import com.ing.datalib.component.TestStep;
 import com.ing.engine.constants.SystemDefaults;
 import com.ing.engine.execution.data.DataProcessor;
 import com.ing.engine.execution.data.Parameter;
+import com.ing.engine.core.CommandControl;
 import com.ing.engine.execution.exception.DriverClosedException;
 import com.ing.engine.execution.exception.ForcedException;
 import com.ing.engine.execution.exception.UnKnownError;
@@ -18,6 +19,8 @@ import com.ing.engine.support.reflect.MethodExecutor;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import static java.lang.String.format;
+import java.util.ArrayList;
+import java.util.List;
 
 public class TestStepRunner {
 
@@ -143,7 +146,23 @@ public class TestStepRunner {
     private void executeStep(TestCaseRunner context, Step step, Parameter parameter)
             throws Throwable {
         step.printStep();
-        context.getControl().sync(step, String.valueOf(parameter.getSubIteration()));
+        if (step.ObjectName.equals("String Operations")) {
+            List<String> concatList = context.getControl().smartCommaSplitter(getStep().getInput());
+            List<String> result = new ArrayList();
+            for (String part : concatList) {
+                if (part.matches("%.*%")) 
+                    result.add("'"+context.getControl().getVar(part)+"'");
+                else if (part.matches("^\\{.*:.*\\}")) 
+                    result.add("'"+context.getControl().getDatasheet(part)+"'");
+                else if (part.matches("\".*\"")) 
+                    result.add("'"+part.substring( 1, part.length() - 1 )+"'");
+            }
+            step.Data = String.join(",", result);
+            context.getControl().sync(step);
+        }
+        else{
+            context.getControl().sync(step, String.valueOf(parameter.getSubIteration()));
+        }
         executeAction(context, step.Action);
     }
 
