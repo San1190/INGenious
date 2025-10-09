@@ -45,16 +45,36 @@ public class TESTARDataWriter {
         webOR.setObjectRepository(objectRepository);
 
         // Prepare an INGenious Scenario in the Test Plan
-        this.scenario = new Scenario(this.project, "MCP_Generated");
-        // Prepare an INGenious TestCase in the created scenario of the Test Plan
+
+        // Create a new scenario version of the high-level MCP scenario
+        String defaultScenarioName = "MCP_scenario";
+        int defaultScenarioVersion = 1;
+        String scenarioName;
+
+        do {
+            scenarioName = defaultScenarioName + "_" + defaultScenarioVersion++;
+        } while ( this.project.getScenarioByName(scenarioName) != null);
+
+        this.scenario = new Scenario(this.project, scenarioName);
+
+        // Prepare an INGenious TestCase in the created high-level MCP scenario
         String timestamp = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date());
-        this.mainTestCase = scenario.addTestCase(timestamp);
+        this.mainTestCase = this.scenario.addTestCase(timestamp);
 
         // Prepare an INGenious reusable project
         this.reusableProject = new Project(project.getLocation());
         this.reusableProject.setName("BDD mapping");
-        // Prepare an INGenious Scenario to be a reusable component
-        this.reusableScenario = new Scenario(this.reusableProject, "StepsDefinition");
+
+        // Prepare an INGenious low-level steps scenario to be a reusable component
+        String defaultStepsName = "StepsDefinition";
+        int defaultStepsVersion = 1;
+        String stepsName;
+
+        do {
+            stepsName = defaultStepsName + "_" + defaultStepsVersion++;
+        } while ( this.project.getScenarioByName(stepsName) != null);
+
+        this.reusableScenario = new Scenario(this.reusableProject, stepsName);
     }
 
     /** Add the action-element info into INGenious */
@@ -210,7 +230,7 @@ public class TESTARDataWriter {
             String reference
     ) {
         String bddStepParsed = bddStep.replaceAll("[\\\\/?:*\"|><]", "_");
-        String bddAction = "StepsDefinition:".concat(bddStepParsed);
+        String bddAction = this.reusableScenario.getName() + ":".concat(bddStepParsed);
 
         // First, create the abstract test step in the main test case of the test plan
         // Only if it does not already exist
