@@ -12,8 +12,8 @@ import java.util.concurrent.TimeUnit;
 
 public class LlmMcpAgent {
 
-	private final String OPENAI_API_KEY = System.getenv("OPENAI_API");
-	private final String OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
+	private final String OPENAI_API_KEY = System.getenv("GITHUB_TOKEN");
+	private final String OPENAI_API_URL = "https://models.github.ai/inference/chat/completions";
 	private final OkHttpClient client;
 	private final ObjectMapper mapper = new ObjectMapper();
 

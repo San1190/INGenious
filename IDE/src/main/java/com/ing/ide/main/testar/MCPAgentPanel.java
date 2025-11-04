@@ -16,10 +16,7 @@ public class MCPAgentPanel {
 	private String defaultBDDText =
 			"Given the user navigates to the url 'https://para.testar.org/'\n" +
 			"When the user logs in with the john/demo credentials\n" +
-			"And the user navigates to request a loan\n" +
-			"And the user fills out and applies for a big loan amount with a small down payment\n" +
-			"And the user select the account 54321\n" +
-			"Then a message indicates the loan is denied";
+			"Then a welcome john smith message is shown";
 
 	public MCPAgentPanel(AppMainFrame sMainFrame) {
 		this.sMainFrame = sMainFrame;
@@ -41,7 +38,7 @@ public class MCPAgentPanel {
 
 		JLabel openaiLabel = new JLabel("OpenAI model:");
 		JTextField openaiTextField = new JTextField(40);
-		openaiTextField.setText("gpt-5-mini");
+		openaiTextField.setText("openai/gpt-4.1");
 		formPanel.add(openaiLabel);
 		formPanel.add(openaiTextField);
 
@@ -54,7 +51,7 @@ public class MCPAgentPanel {
 
 		JLabel actionsLabel = new JLabel("Max Actions:");
 		JSpinner actionsSpinner = new JSpinner();
-		actionsSpinner.setValue(50);
+		actionsSpinner.setValue(10);
 		formPanel.add(actionsLabel);
 		formPanel.add(actionsSpinner);
 
