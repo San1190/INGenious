@@ -94,8 +94,9 @@ public class ObjectGroup<T extends ORObjectInf> implements TreeNode {
             new File(object.getRepLocation()).mkdirs();
             parent.getRoot().setSaved(false);
             return object;
+        } else {
+            return getObjectByName(objectName);
         }
-        return null;
     }
 
     @JsonIgnore
