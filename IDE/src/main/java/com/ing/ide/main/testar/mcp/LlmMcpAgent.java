@@ -13,7 +13,7 @@ import java.util.concurrent.TimeUnit;
 public class LlmMcpAgent {
 
 	private final String OPENAI_API_KEY = System.getenv("GITHUB_TOKEN");
-	private final String OPENAI_API_URL = "https://models.github.ai/inference/chat/completions";
+	private final String OPENAI_API_URL = "https://api.githubcopilot.com/chat/completions";
 	private final OkHttpClient client;
 	private final ObjectMapper mapper = new ObjectMapper();
 
@@ -51,7 +51,9 @@ public class LlmMcpAgent {
 		final List<Map<String, Object>> tools = McpToolBuilder.from(McpInterface.class);
 		final McpToolExecutor<McpInterface> executor = McpToolExecutor.of(McpInterface.class, mcpInterface, mapper);
 
-		for (int step = 0; step < this.maxActions; step++) {
+        int step = 0;
+
+        while (step < this.maxActions) {
 			Map<String, Object> body = new HashMap<>();
 			body.put("model", openaiModel);
 			body.put("messages", messages);
@@ -93,70 +95,74 @@ public class LlmMcpAgent {
 						return failed;
 					}
 				}
+                else {
+                    // if response is successful
+                    String json = Objects.requireNonNull(response.body()).string();
 
-				String json = Objects.requireNonNull(response.body()).string();
-				Map<?, ?> parsed = mapper.readValue(json, Map.class);
-				Map<?, ?> choice = ((List<Map<?, ?>>) parsed.get("choices")).get(0);
-				Map<?, ?> message = (Map<?, ?>) choice.get("message");
+                    Map<?, ?> parsed = mapper.readValue(json, Map.class);
+                    Map<?, ?> choice = ((List<Map<?, ?>>) parsed.get("choices")).get(0);
+                    Map<?, ?> message = (Map<?, ?>) choice.get("message");
 
-				messages.add((Map<String, Object>) message);
+                    messages.add((Map<String, Object>) message);
 
-				// Read all tool_calls (array)
-				List<Map<?, ?>> toolCalls = (List<Map<?, ?>>) message.get("tool_calls");
+                    // Read all tool_calls (array)
+                    List<Map<?, ?>> toolCalls = (List<Map<?, ?>>) message.get("tool_calls");
 
-				// Empty toolCalls response. Don't stop, give the LLM another chance
-				if (toolCalls == null || toolCalls.isEmpty()) {
-					String feedback = "ISSUE: No tool was selected. Please review the last results.";
-					addInfoLog(feedback);
-					messages.add(Map.of(
-							"role", "user",
-							"content", "Reminder: choose a valid tool to proceed."
-					));
-					continue;
-				}
+                    // Empty toolCalls response. Don't stop, give the LLM another chance
+                    if (toolCalls == null || toolCalls.isEmpty()) {
+                        String feedback = "ISSUE: No tool was selected. Please review the last results.";
+                        addInfoLog(feedback);
+                        messages.add(Map.of(
+                                "role", "user",
+                                "content", "Reminder: choose a valid tool to proceed."
+                        ));
+                        continue;
+                    }
 
-				// Execute all tool calls
-				for (Map<?, ?> toolCall : toolCalls) {
-					String callId = (String) toolCall.get("id");
-					Map<?, ?> function = (Map<?, ?>) toolCall.get("function");
-					String toolName = (String) function.get("name");
-					String argumentsJson = (String) function.get("arguments");
+                    // Execute all tool calls
+                    for (Map<?, ?> toolCall : toolCalls) {
+                        String callId = (String) toolCall.get("id");
+                        Map<?, ?> function = (Map<?, ?>) toolCall.get("function");
+                        String toolName = (String) function.get("name");
+                        String argumentsJson = (String) function.get("arguments");
 
-					addInfoLog("DEBUG toolName: " + toolName);
-					addInfoLog("DEBUG argumentsJson: " + argumentsJson);
+                        addInfoLog("DEBUG toolName: " + toolName);
+                        addInfoLog("DEBUG argumentsJson: " + argumentsJson);
 
-					Object resultObj = executor.execute(toolName, argumentsJson);
-					String result = (resultObj == null) ? "null" : resultObj.toString();
+                        Object resultObj = executor.execute(toolName, argumentsJson);
+                        String result = (resultObj == null) ? "null" : resultObj.toString();
 
-					// Check if stop the execution due to the LLM decision
-					if(McpNames.of(McpInterface::stopTestExecution).equals(toolName)){
-						addInfoLog("LLM agent decided to stop the test execution");
-						return "LLM agent decided to stop the test execution";
-					}
+                        // Check if stop the execution due to the LLM decision
+                        if (McpNames.of(McpInterface::stopTestExecution).equals(toolName)) {
+                            addInfoLog("LLM agent decided to stop the test execution");
+                            return "LLM agent decided to stop the test execution";
+                        }
 
-					// Reply to this tool call first
-					boolean requireStateImage = McpNames.of(McpInterface::getStateImage).equals(toolName);
-					String toolContent = requireStateImage ? "screenshot_ready" : result;
-					messages.add(Map.of(
-							"role", "tool",
-							"tool_call_id", callId,
-							"content", toolContent
-					));
+                        // Reply to this tool call first
+                        boolean requireStateImage = McpNames.of(McpInterface::getStateImage).equals(toolName);
+                        String toolContent = requireStateImage ? "screenshot_ready" : result;
+                        messages.add(Map.of(
+                                "role", "tool",
+                                "tool_call_id", callId,
+                                "content", toolContent
+                        ));
 
-					// If required, additionally add the image user message
-					if (requireStateImage && !result.isEmpty() && supportsVision(openaiModel)) {
-						attachStateImage(messages, result);
-					} else if (requireStateImage && !result.isEmpty()) {
-						messages.add(Map.of(
-								"role","user",
-								"content","Screenshot captured (omitted for this model)."
-						));
-					} else {
-						// This is only for debugging purposes
-						addInfoLog("DEBUG result: " + result);
-					}
-				}
-
+                        // If required, additionally add the image user message
+                        if (requireStateImage && !result.isEmpty() && supportsVision(openaiModel)) {
+                            attachStateImage(messages, result);
+                        } else if (requireStateImage && !result.isEmpty()) {
+                            messages.add(Map.of(
+                                    "role", "user",
+                                    "content", "Screenshot captured (omitted for this model)."
+                            ));
+                        } else {
+                            // This is only for debugging purposes
+                            addInfoLog("DEBUG result: " + result);
+                        }
+                    }
+                    // step if there are no exceptions
+                    step++;
+                }
 			} catch (Exception e) {
 				addSevereLog("LLM step failed: " + e.getMessage());
 				e.printStackTrace();
@@ -202,7 +208,7 @@ public class LlmMcpAgent {
 
 	private boolean supportsVision(String model) {
 		String m = model == null ? "" : model.toLowerCase();
-		return m.contains("gpt-4o") || m.contains("gpt-4.1") || m.contains("gpt-5");
+		return /*m.contains("gpt-4o") ||*/ m.contains("gpt-4.1") || m.contains("gpt-5");
 	}
 
 	private boolean isReasoningModel(String model) {
