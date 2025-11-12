@@ -38,7 +38,7 @@ public class MCPAgentPanel {
 
 		JLabel openaiLabel = new JLabel("OpenAI model:");
 		JTextField openaiTextField = new JTextField(40);
-		openaiTextField.setText("openai/gpt-4.1");
+		openaiTextField.setText("gpt-4o");
 		formPanel.add(openaiLabel);
 		formPanel.add(openaiTextField);
 
