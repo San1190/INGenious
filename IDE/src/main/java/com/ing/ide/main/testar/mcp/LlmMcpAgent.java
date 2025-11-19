@@ -13,6 +13,7 @@ import java.util.concurrent.TimeUnit;
 
 public class LlmMcpAgent {
 
+    private final Boolean VISION = parse(System.getenv("VISION"), false); // explicit vision handling
     private final String OPENAI_API_KEY = System.getenv("GITHUB_TOKEN"); // OATH token for GitHub Copilot
     private final String OPENAI_API_URL = "https://api.githubcopilot.com/chat/completions";
     private final OkHttpClient client;
@@ -53,6 +54,7 @@ public class LlmMcpAgent {
         final McpToolExecutor<McpInterface> executor = McpToolExecutor.of(McpInterface.class, mcpInterface, mapper);
 
         int step = 0;
+        boolean visionRequest = false; // this (sticky) flag indicates vision should be enabled
 
         while (step < this.maxActions) {
             Map<String, Object> body = new HashMap<>();
@@ -73,6 +75,7 @@ public class LlmMcpAgent {
                             .url(OPENAI_API_URL)
                             .header("Authorization", "Bearer " + OPENAI_API_KEY)
                             .header("Content-Type", "application/json")
+                            .header("Copilot-Vision-Request", "" + visionRequest)
                             .post(RequestBody.create(MediaType.parse("application/json"), mapper.writeValueAsString(body)))
                             .build()
             ).execute()) {
@@ -96,9 +99,11 @@ public class LlmMcpAgent {
                         String failed = "Stop execution due to OpenAI call fail: " + response.code();
                         addSevereLog(failed);
                         try {
-                            String request = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(body);
-                            addSevereLog("request: " + request);
+                            String request_body = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(body);
+                            addSevereLog("request headers: " + response.request().headers().toString());
+                            addSevereLog("request body: " + request_body);
                             addSevereLog("response: " + response.body().string());
+
                             return failed;
                         } catch (JsonProcessingException e) {
                             addSevereLog("JSON processing failed" + e.getMessage());
@@ -161,12 +166,15 @@ public class LlmMcpAgent {
 
                         // If required, additionally add the image user message
                         if (requireStateImage && !result.isEmpty() && supportsVision(openaiModel)) {
-                            attachStateImage(messages, result);
+                            addInfoLog("VISION REQUEST: attaching state image");
+                            attachStateImage(userMessages, result);
+                            visionRequest = true;
                         } else if (requireStateImage && !result.isEmpty()) {
                             userMessages.add(Map.of(
                                     "role", "user",
                                     "content", "Screenshot captured (omitted for this model)."
                             ));
+                            // add vision request for the next iteration
                         } else {
                             // This is only for debugging purposes
                             addInfoLog("DEBUG result: " + result);
@@ -197,6 +205,17 @@ public class LlmMcpAgent {
         mcpInterface.stopTestExecution();
         addInfoLog("maxAction executed");
         return "maxAction executed";
+    }
+
+    private boolean parse(String value, boolean defaultValue) {
+        if (value == null) {
+            return (Boolean) defaultValue;
+        }
+        try {
+            return Boolean.parseBoolean(value);
+        } catch (Exception e) {
+            return (Boolean) defaultValue;
+        }
     }
 
     private List<Map<String, Object>> defineMessages() {
@@ -233,7 +252,7 @@ public class LlmMcpAgent {
 
     private boolean supportsVision(String model) {
         String m = model == null ? "" : model.toLowerCase();
-        return /*m.contains("gpt-4o") ||*/ m.contains("gpt-4.1") || m.contains("gpt-5");
+        return VISION && (m.contains("gpt-4o") || m.contains("gpt-4.1") || m.contains("gpt-5"));
     }
 
     private boolean isReasoningModel(String model) {
