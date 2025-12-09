@@ -87,7 +87,7 @@ public class PlaywrightMcpDriver implements McpInterface {
     }
 
     @Override
-    public String getState() {
+    public String getStateInteractiveWidgets() {
         if (this.state == null) return "ISSUE: No web state-page initialized";
 
         List<String> widgetsContext = new ArrayList<>();
@@ -95,7 +95,7 @@ public class PlaywrightMcpDriver implements McpInterface {
         try {
             state = new PlaywrightState(system);
 
-            List<PlaywrightWidget> stateWidgets = state.getWidgets();
+            List<PlaywrightWidget> stateWidgets = state.getInteractiveWidgets();
 
             for (PlaywrightWidget widget : stateWidgets) {
 
@@ -148,7 +148,7 @@ public class PlaywrightMcpDriver implements McpInterface {
 
         } catch (PlaywrightException e) {
             addSevereLog("Failed to collect state interactive elements: " + e.getMessage());
-            return "ISSUE trying to obtain state information: " + e.getMessage();
+            return "ISSUE trying to obtain state interactive elements information: " + e.getMessage();
         }
 
         return String.join("\n", widgetsContext);
@@ -344,6 +344,35 @@ public class PlaywrightMcpDriver implements McpInterface {
             addSevereLog("Failed to obtain the getStateImage: " + e.getMessage());
             return ""; // This empty string is used in the MCPAgent switch
         }
+    }
+
+    public String getStateVisualText() {
+        if (this.state == null) return "ISSUE: No web state-page initialized";
+
+        List<String> widgetsContext = new ArrayList<>();
+
+        try {
+            state = new PlaywrightState(system);
+
+            List<PlaywrightWidget> stateWidgets = state.getVisibleWidgetsWithText();
+
+            for (PlaywrightWidget widget : stateWidgets) {
+                // Prepare the web widget text context to be sent to the AI agent
+                Map<String, String> widgetInfo = new LinkedHashMap<>();
+                widgetInfo.put("text", widget.get(PlaywrightTags.WebLocatorText).replaceAll("\\s+", " ").trim());
+
+                // Then serialize each widget as JSON or custom line format:
+                widgetsContext.add(widgetInfo.entrySet().stream()
+                    .map(e -> e.getKey() + ": " + e.getValue())
+                    .collect(Collectors.joining(" | "))
+                );
+            }
+        } catch (PlaywrightException e) {
+            addSevereLog("Failed to collect visible text of state elements: " + e.getMessage());
+            return "ISSUE trying to obtain visible text of state elements: " + e.getMessage();
+        }
+
+        return String.join("\n", widgetsContext);
     }
 
     @Override

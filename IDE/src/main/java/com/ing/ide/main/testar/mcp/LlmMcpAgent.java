@@ -180,6 +180,7 @@ public class LlmMcpAgent {
                             attachStateImage(userMessages, result);
                             visionRequest = true;
                         } else if (requireStateImage && !result.isEmpty()) {
+                            addInfoLog("VISION REQUEST: is omitted for this model or by the user");
                             userMessages.add(Map.of(
                                     "role", "user",
                                     "content", "Screenshot captured (omitted for this model)."
@@ -224,10 +225,10 @@ public class LlmMcpAgent {
                 "role", "system",
                 "content", "You are a BDD-GUI test agent. " +
                         "Your goal is to complete the BDD instructions. " +
-                        "Use loadWebURL, getState, executeClickAction, executeFillAction, and executeSelectAction functions. " +
+                        "Use loadWebURL, getStateInteractiveWidgets, executeClickAction, executeFillAction, and executeSelectAction functions. " +
                         "Use getCurrentURL and checkExecutedActions functions if you need assistance. " +
                         "Use navigateBack function if you need to control the web browser. " +
-                        "After completing each BDD step (Given, When, Then), use getStateImage and addStepAssert functions to validate that step. " +
+                        "After completing each BDD step (Given, When, Then), use (getStateImage or getStateVisualText) and addStepAssert functions to validate that step. " +
                         "When asserting all BDD instructions, use the stopTestExecution function.")
         );
 

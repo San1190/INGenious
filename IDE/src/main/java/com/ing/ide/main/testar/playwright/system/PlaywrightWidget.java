@@ -74,7 +74,22 @@ public class PlaywrightWidget implements Widget, Serializable {
         // Evaluate a JavaScript function inside the browser context to extract multiple attributes
         Object result = element.evaluate(
                 "(el, selectors) => {" +
+                        // Unpack clickable and fillable selectors
                         "  const [clickable, fillable] = selectors;" +
+                        // Custom function to check visibility
+                        "  const style = window.getComputedStyle(el);" +
+                        "  const hasBox = !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);" +
+                        "  let visible = false;" +
+                        "  if (style && hasBox && style.visibility !== 'hidden' && style.display !== 'none' && parseFloat(style.opacity || '1') !== 0) {" +
+                        "    visible = true;" +
+                        "    let p = el.parentElement;" +
+                        "    while (p && visible) {" +
+                        "      const ps = window.getComputedStyle(p);" +
+                        "      if (ps.display === 'none' || ps.visibility === 'hidden') visible = false;" +
+                        "      p = p.parentElement;" +
+                        "    }" +
+                        "  }" +
+                        // Return the collected attributes
                         "  return {" +
                         "    id: el.id || ''," +
                         "    name: el.name || ''," +
@@ -89,7 +104,8 @@ public class PlaywrightWidget implements Widget, Serializable {
                         "    title: el.getAttribute('title') || ''," +
                         "    innerText: el.innerText || ''," +
                         "    isClickable: el.matches(clickable)," +
-                        "    isFillable: el.matches(fillable)" +
+                        "    isFillable: el.matches(fillable)," +
+                        "    isVisible: visible" +
                         "  };" +
                         "}",
                 Arrays.asList(
@@ -112,6 +128,7 @@ public class PlaywrightWidget implements Widget, Serializable {
         this.set(PlaywrightTags.WebType, (String) attributes.get("type"));
         this.set(PlaywrightTags.WebTitle, (String) attributes.get("title"));
         this.set(PlaywrightTags.WebInnerText, (String) attributes.get("innerText"));
+        this.set(PlaywrightTags.WebIsVisible, (Boolean) attributes.get("isVisible"));
 
         this.set(PlaywrightTags.WebIsClickable, (Boolean) attributes.get("isClickable"));
         this.set(PlaywrightTags.WebIsFillable, (Boolean) attributes.get("isFillable"));

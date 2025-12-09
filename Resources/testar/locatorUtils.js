@@ -81,9 +81,14 @@
 
     getText: function (el) {
       try {
-        const text = el.innerText?.trim();
-        if (!text || text.length === 0) return '';
-        return text;
+        // Only direct text nodes, not descendant elements
+        const text = Array.from(el.childNodes || [])
+          .filter(n => n.nodeType === Node.TEXT_NODE)
+          .map(n => n.textContent || '')
+          .join('')
+          .trim();
+
+        return text || '';
       } catch (e) {
         return '';
       }

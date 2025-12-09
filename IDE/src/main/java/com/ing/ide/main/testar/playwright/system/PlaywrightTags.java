@@ -59,6 +59,10 @@ public class PlaywrightTags extends TagsBase {
 
     public static final Tag<String> WebChainedLocator = from("WebChainedLocator", String.class);
 
+    /** Custom Widget and Locators helper Tags **/
+
+    public static final Tag<Boolean> WebIsVisible = from("WebIsVisible", Boolean.class);
+
     /** Action Tags **/
 
     public static final Tag<Boolean> WebIsClickable = from("WebIsClickable", Boolean.class);

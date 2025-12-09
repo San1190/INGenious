@@ -29,7 +29,7 @@ public class PlaywrightState extends PlaywrightWidget implements State {
         return page;
     }
 
-    public List<PlaywrightWidget> getWidgets() {
+    public List<PlaywrightWidget> getInteractiveWidgets() {
         List<PlaywrightWidget> stateWidgets = new ArrayList<>();
 
         String widgetsSelector = String.join(", ", Stream.of(
@@ -43,6 +43,27 @@ public class PlaywrightState extends PlaywrightWidget implements State {
         for (ElementHandle elementHandle : stateElements) {
             PlaywrightWidget widget = new PlaywrightWidget(this, this, elementHandle);
             stateWidgets.add(widget);
+        }
+
+        return stateWidgets;
+    }
+
+    public List<PlaywrightWidget> getVisibleWidgetsWithText() {
+        List<PlaywrightWidget> stateWidgets = new ArrayList<>();
+
+        List<ElementHandle> stateElements = this.page.querySelectorAll("*");
+
+        for (ElementHandle elementHandle : stateElements) {
+            PlaywrightWidget widget = new PlaywrightWidget(this, this, elementHandle);
+
+            // Custom visible function used to check element visibility
+            boolean isVisible = widget.get(PlaywrightTags.WebIsVisible, false);
+            // Custom getText locator function used to direct text nodes
+            String text = widget.get(PlaywrightTags.WebLocatorText, "");
+
+            if (isVisible && text != null && !text.trim().isEmpty()) {
+                stateWidgets.add(widget);
+            }
         }
 
         return stateWidgets;

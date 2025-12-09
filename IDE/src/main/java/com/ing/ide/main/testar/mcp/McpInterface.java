@@ -35,7 +35,7 @@ public interface McpInterface {
     String navigateBack();
 
     @McpMethod(description = "Get a list of current interactive GUI web elements with CSS selector, visible text, tag type, and accessibility attributes.")
-    String getState();
+    String getStateInteractiveWidgets();
 
     @McpMethod(description = "Use a CSS selector to click an element.")
     String executeClickAction(
@@ -62,6 +62,9 @@ public interface McpInterface {
 
     @McpMethod(description = "Get an image of the current GUI state.")
     String getStateImage();
+
+    @McpMethod(description = "Get a list of the text of all current visible GUI web elements.")
+    String getStateVisualText();
 
     @McpMethod(description = "Add a unique text that can be used to assert a BDD step.")
     String addStepAssert(
