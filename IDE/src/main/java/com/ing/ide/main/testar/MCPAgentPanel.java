@@ -136,6 +136,10 @@ public class MCPAgentPanel {
 			public void actionPerformed(ActionEvent e) {
 				saveFromUi.run();
 
+				// Disable interaction with the dialog panel elements
+				setComponentsEnabled(dialog.getContentPane(), false);
+				dialog.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+
 				String apiKeyEnvVar = apiKeyEnvVarField.getText().trim();
 				String apiUrl = apiUrlField.getText().trim();
 				String openaiModel = openaiTextField.getText().trim();
@@ -159,6 +163,13 @@ public class MCPAgentPanel {
 					@Override
 					protected String doInBackground() throws Exception {
 						return llmMcpAgent.runLLMAgent();
+					}
+
+					@Override
+					protected void done() {
+						// Enable interaction with the panel when the worker is finished
+						setComponentsEnabled(dialog.getContentPane(), true);
+						dialog.setCursor(Cursor.getDefaultCursor());
 					}
 				};
 				worker.execute();
@@ -217,6 +228,15 @@ public class MCPAgentPanel {
 					java.util.logging.Level.SEVERE,
 					e.getMessage()
 			);
+		}
+	}
+
+	private void setComponentsEnabled(Container container, boolean enabled) {
+		for (Component c : container.getComponents()) {
+			c.setEnabled(enabled);
+			if (c instanceof Container) {
+				setComponentsEnabled((Container) c, enabled);
+			}
 		}
 	}
 
