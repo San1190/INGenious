@@ -105,6 +105,9 @@ public class PlaywrightMcpDriver implements McpInterface {
 
                     // Prepare the web widget context to be sent to the AI agent
                     Map<String, String> widgetInfo = new LinkedHashMap<>();
+
+                    widgetInfo.put("isModal", String.valueOf(widget.get(PlaywrightTags.WebIsModal, false)));
+
                     widgetInfo.put("css", widget.get(PlaywrightTags.WebLocatorCSS));
                     widgetInfo.put("role", widget.get(PlaywrightTags.WebTagName));
 

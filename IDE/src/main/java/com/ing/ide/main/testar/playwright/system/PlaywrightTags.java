@@ -63,6 +63,8 @@ public class PlaywrightTags extends TagsBase {
 
     public static final Tag<Boolean> WebIsVisible = from("WebIsVisible", Boolean.class);
 
+    public static final Tag<Boolean> WebIsModal = from("WebIsModal", Boolean.class);
+
     /** Action Tags **/
 
     public static final Tag<Boolean> WebIsClickable = from("WebIsClickable", Boolean.class);

@@ -153,6 +153,13 @@ public class PlaywrightWidget implements Widget, Serializable {
         this.set(PlaywrightTags.WebLocatorTitle, (String) selectors.get("title"));
         this.set(PlaywrightTags.WebLocatorTestId, (String) selectors.get("testId"));
 
+        Object isModalObj = selectors.get("isModal");
+        if (isModalObj instanceof Boolean) {
+            this.set(PlaywrightTags.WebIsModal, (Boolean) isModalObj);
+        } else {
+            this.set(PlaywrightTags.WebIsModal, false);
+        }
+
         // TODO: Prepare a logic to Compose a chained selector
         this.set(PlaywrightTags.WebChainedLocator, "");
     }

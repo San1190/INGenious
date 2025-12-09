@@ -156,6 +156,71 @@
         '';
     },
 
+    isModalElement: function (el) {
+      if (!el || el.nodeType !== Node.ELEMENT_NODE) return false;
+
+      const tag = (el.tagName || '').toLowerCase();
+      const role = (el.getAttribute('role') || '').toLowerCase();
+      const ariaModal = (el.getAttribute('aria-modal') || '').toLowerCase();
+      const id = (el.id || '').toLowerCase();
+      const className = (el.className || '').toString().toLowerCase();
+
+      // Explicit dialogs
+      if (tag === 'dialog') return true;
+      if (ariaModal === 'true') return true;
+      if (role === 'dialog' || role === 'alertdialog') return true;
+
+      const namePattern = id + ' ' + className;
+      // Common naming patterns for modals / popups
+      if (namePattern.includes('modal') ||
+          namePattern.includes('popup') ||
+          namePattern.includes('dialog')) {
+        return true;
+      }
+      // Cookie banners / consent overlays
+      if (namePattern.includes('cookie') || 
+          namePattern.includes('consent')) {
+        return true;
+      }
+
+      // Possible geometric + CSS heuristic to detect big overlay in front of everything
+      /*try {
+        const rect = el.getBoundingClientRect();
+        const vw = window.innerWidth || document.documentElement.clientWidth || 0;
+        const vh = window.innerHeight || document.documentElement.clientHeight || 0;
+        const viewportArea = vw * vh;
+        const elArea = rect.width * rect.height;
+        const areaRatio = viewportArea > 0 ? (elArea / viewportArea) : 0;
+
+        const style = window.getComputedStyle(el);
+        const position = style.position;
+        const zIndex = parseInt(style.zIndex || '0', 10);
+
+        const overlayish = position === 'fixed' || position === 'sticky';
+        const coversMuch = areaRatio > 0.25; // covers ≥ 25% of viewport
+        const inFront = zIndex >= 1000 || (zIndex >= 100 && coversMuch);
+
+        if (overlayish && coversMuch && inFront) {
+          return true;
+        }
+      } catch (e) {
+        // If something goes wrong, just don't treat it as modal
+      }*/
+
+      return false;
+    },
+
+    isInModal: function (el) {
+      let node = el;
+      while (node && node !== document.body) {
+        if (this.isModalElement(node)) {
+          return true;
+        }
+        node = node.parentElement;
+      }
+      return false;
+    },
+
     extractLocators: function (el) {
       return {
         role: this.getRole(el),
@@ -166,7 +231,8 @@
         label: this.getLabel(el),
         altText: el.getAttribute('alt') || '',
         title: el.getAttribute('title') || '',
-        testId: this.getTestId(el)
+        testId: this.getTestId(el),
+        isModal: this.isInModal(el)
       };
     }
   };
