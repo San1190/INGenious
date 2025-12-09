@@ -20,6 +20,46 @@ public final class McpToolBuilder {
 
     private McpToolBuilder() {}
 
+        /*
+        "tools": [
+            {
+                "type": "function",
+                "function": {
+                    "name": "getState",
+                    "description": "Get a list of current interactive GUI web elements with CSS selector, visible text, tag type, and accessibility attributes.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {},
+                        // No inputs -> nothing is required
+                        "additionalProperties": false
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "executeClickAction",
+                    "description": "Use a CSS selector to click an element.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "bddStep": {
+                                "type": "string",
+                                "description": "The BDD step text associated with this action. Do not modify."
+                            },
+                            "cssSelector": {
+                                "type": "string",
+                                "description": "The CSS selector of the clickable element."
+                            }
+                        },
+                        "required": ["bddStep", "cssSelector"],
+                        "additionalProperties": false
+                    }
+                }
+            }
+        ]
+    */
+
     public static List<Map<String,Object>> from(Class<?> apiInterface) {
         List<Map<String,Object>> functionsMap = new ArrayList<>();
         for (Method m : apiInterface.getMethods()) {
@@ -50,6 +90,7 @@ public final class McpToolBuilder {
             Map<String,Object> params = new LinkedHashMap<>();
             params.put("type", "object");
             params.put("properties", props);
+            params.put("additionalProperties", false);
             params.put("required", required);
 
             Map<String,Object> function = new LinkedHashMap<>();
