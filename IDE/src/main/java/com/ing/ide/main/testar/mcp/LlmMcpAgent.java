@@ -13,28 +13,42 @@ import java.util.concurrent.TimeUnit;
 
 public class LlmMcpAgent {
 
-    private final Boolean VISION = parse(System.getenv("VISION"), false); // explicit vision handling
-    private final String OPENAI_API_KEY = System.getenv("GITHUB_TOKEN"); // OATH token for GitHub Copilot
-    private final String OPENAI_API_URL = "https://api.githubcopilot.com/chat/completions";
     private final OkHttpClient client;
     private final ObjectMapper mapper = new ObjectMapper();
 
-    private final int maxActions;
+    private final String openaiApiUrl;
+    private final String openaiApiKey;
     private final String openaiModel;
+    private final boolean vision;
     private final String reasoningLevel;
+    private final int maxActions;
     private final String bddInstructions;
+
     private final McpInterface mcpInterface;
 
     public LlmMcpAgent(Project project,
+                       String openaiApiUrl,
+                       String openaiApiKeyVariable,
                        String openaiModel,
+                       boolean vision,
                        String reasoningLevel,
                        int maxActions,
-                       String bddInstructions) {
+                       String bddInstructions
+                      ) {
+
+        this.openaiApiUrl = openaiApiUrl;
+        this.openaiApiKey = System.getenv(openaiApiKeyVariable);
+        if (openaiApiKey == null || openaiApiKey.isEmpty()) {
+            throw new IllegalStateException("Environment variable '" + openaiApiKeyVariable + "' is not set or is empty.");
+        }
         this.openaiModel = openaiModel;
+        this.vision = vision;
         this.reasoningLevel = reasoningLevel;
         this.maxActions = maxActions;
         this.bddInstructions = bddInstructions;
+
         this.mcpInterface = new PlaywrightMcpDriver(project);
+
         this.client = new OkHttpClient.Builder()
                 .connectTimeout(30, TimeUnit.SECONDS)
                 .writeTimeout(120, TimeUnit.SECONDS)
@@ -44,10 +58,6 @@ public class LlmMcpAgent {
     }
 
     public String runLLMAgent() {
-        if (OPENAI_API_KEY == null) {
-            throw new IllegalStateException("Missing OPENAI_API env var.");
-        }
-
         // Prepare the messages and tools data to be sent to the LLM
         final List<Map<String, Object>> messages = defineMessages();
         final List<Map<String, Object>> tools = McpToolBuilder.from(McpInterface.class);
@@ -72,8 +82,8 @@ public class LlmMcpAgent {
 
             try (Response response = client.newCall(
                     new Request.Builder()
-                            .url(OPENAI_API_URL)
-                            .header("Authorization", "Bearer " + OPENAI_API_KEY)
+                            .url(openaiApiUrl)
+                            .header("Authorization", "Bearer " + openaiApiKey)
                             .header("Content-Type", "application/json")
                             .header("Copilot-Vision-Request", "" + visionRequest)
                             .post(RequestBody.create(MediaType.parse("application/json"), mapper.writeValueAsString(body)))
@@ -207,17 +217,6 @@ public class LlmMcpAgent {
         return "maxAction executed";
     }
 
-    private boolean parse(String value, boolean defaultValue) {
-        if (value == null) {
-            return (Boolean) defaultValue;
-        }
-        try {
-            return Boolean.parseBoolean(value);
-        } catch (Exception e) {
-            return (Boolean) defaultValue;
-        }
-    }
-
     private List<Map<String, Object>> defineMessages() {
         List<Map<String, Object>> messages = new ArrayList<>();
 
@@ -252,7 +251,7 @@ public class LlmMcpAgent {
 
     private boolean supportsVision(String model) {
         String m = model == null ? "" : model.toLowerCase();
-        return VISION && (m.contains("gpt-4o") || m.contains("gpt-4.1") || m.contains("gpt-5"));
+        return vision && (m.contains("gpt-4o") || m.contains("gpt-4.1") || m.contains("gpt-5"));
     }
 
     private boolean isReasoningModel(String model) {
