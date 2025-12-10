@@ -47,7 +47,9 @@ public class LlmMcpAgent {
         this.maxActions = maxActions;
         this.bddInstructions = bddInstructions;
 
-        this.mcpInterface = new PlaywrightMcpDriver(project, bddInstructions);
+        // Wrap the technical MCP driver with the BDD steps validator
+        PlaywrightMcpDriver mcpDriver = new PlaywrightMcpDriver(project);
+        this.mcpInterface = new BddMcpValidator(mcpDriver, new BddStepTracker(bddInstructions));
 
         this.client = new OkHttpClient.Builder()
                 .connectTimeout(30, TimeUnit.SECONDS)
