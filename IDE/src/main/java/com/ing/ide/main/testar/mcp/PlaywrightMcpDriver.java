@@ -34,14 +34,14 @@ public class PlaywrightMcpDriver implements McpInterface {
     }
 
     @Override
-    public String loadWebURL(String bddStep, String url){
+    public Feedback loadWebURL(String bddStep, String url){
         try {
             this.system = new PlaywrightSUT(url);
             this.state = new PlaywrightState(this.system);
         } catch (Exception e) {
             addSevereLog("Failed to run PlaywrightSUT with URL: " + url);
             addSevereLog(e.getMessage());
-            return "ISSUE loading the Web URL: " + e.getMessage();
+            return Feedback.issue("Loading the Web URL: " + e.getMessage());
         }
 
         // Add browser control test step into INGenious
@@ -54,25 +54,25 @@ public class PlaywrightMcpDriver implements McpInterface {
                 ""
         );
 
-        return "Web URL loaded successfully!";
+        return Feedback.validContext("Web URL loaded successfully!");
     }
 
     @Override
-    public String getCurrentURL() {
-        if (this.state == null) return "ISSUE: No web state-page initialized";
+    public Feedback getCurrentURL() {
+        if (this.state == null) return Feedback.issue("No web state-page initialized.");
 
         String url = this.state.getPage().url();
-        if (url == null || url.isEmpty()) return "ISSUE: No web url available.";
+        if (url == null || url.isEmpty()) return Feedback.issue("No web url available.");
 
-        return url;
+        return Feedback.validContext(url);
     }
 
     @Override
-    public String navigateBack() {
-        if (this.state == null) return "ISSUE: No web state-page initialized";
+    public Feedback navigateBack() {
+        if (this.state == null) return Feedback.issue("No web state-page initialized.");
 
         Response response = this.state.getPage().goBack();
-        if (response == null) return "ISSUE: Cannot navigate back - no previous page.";
+        if (response == null) return Feedback.issue("Cannot navigate back - no previous page.");
 
         // Add browser control test step into INGenious
         dataWriter.addConcreteTestStep(
@@ -83,12 +83,12 @@ public class PlaywrightMcpDriver implements McpInterface {
                 ""
         );
 
-        return String.format("Success navigating back to '%s'", response.url());
+        return Feedback.validContext(String.format("Success navigating back to '%s'", response.url()));
     }
 
     @Override
-    public String getStateInteractiveWidgets() {
-        if (this.state == null) return "ISSUE: No web state-page initialized";
+    public Feedback getStateInteractiveWidgets() {
+        if (this.state == null) return Feedback.issue("No web state-page initialized.");
 
         List<String> widgetsContext = new ArrayList<>();
 
@@ -151,10 +151,10 @@ public class PlaywrightMcpDriver implements McpInterface {
 
         } catch (PlaywrightException e) {
             addSevereLog("Failed to collect state interactive elements: " + e.getMessage());
-            return "ISSUE trying to obtain state interactive elements information: " + e.getMessage();
+            return Feedback.issue("Trying to obtain state interactive elements information: " + e.getMessage());
         }
 
-        return String.join("\n", widgetsContext);
+        return Feedback.validContext(String.join("\n", widgetsContext));
     }
 
     private boolean isExternalLink(PlaywrightState state, String href) {
@@ -195,16 +195,16 @@ public class PlaywrightMcpDriver implements McpInterface {
     }
 
     @Override
-    public String executeClickAction(String bddStep, String rawCssSelector) {
-        if (this.state == null) return "ISSUE: No web state-page initialized";
+    public Feedback executeClickAction(String bddStep, String rawCssSelector) {
+        if (this.state == null) return Feedback.issue("No web state-page initialized.");
 
         addInfoLog("rawCssSelector: " + rawCssSelector);
 
         String cssSelector = normalizeCssSelector(rawCssSelector);
 
         if (cssSelector == null || cssSelector.trim().isEmpty()) {
-            addSevereLog("ISSUE with an invalid CSS selector: " + rawCssSelector);
-            return "ISSUE with an invalid CSS selector: " + rawCssSelector;
+            addSevereLog("ISSUE: Invalid CSS selector: " + rawCssSelector);
+            return Feedback.issue("Invalid CSS selector: " + rawCssSelector);
         }
 
         try {
@@ -213,8 +213,8 @@ public class PlaywrightMcpDriver implements McpInterface {
             PlaywrightWidget widget = state.getWidgetFromCssSelector(cssSelector);
 
             if (widget == null) {
-                addSevereLog("ISSUE because no matching element found for CSS selector: " + cssSelector);
-                return "ISSUE because no matching element found for CSS selector: " + cssSelector;
+                addSevereLog("ISSUE: No matching element found for CSS selector: " + cssSelector);
+                return Feedback.issue("No matching element found for CSS selector: " + cssSelector);
             }
 
             PlaywrightClick clickAction = new PlaywrightClick(widget);
@@ -225,24 +225,24 @@ public class PlaywrightMcpDriver implements McpInterface {
             String actionDescription = "Executed Click Action in the widget " + cssSelector;
             saveExecutedAction(actionDescription);
 
-            return actionDescription;
+            return Feedback.validContext(actionDescription);
         } catch (Exception e) {
             addSevereLog("Failed to execute action for selector: " + cssSelector + " - " + e.getMessage());
-            return "ISSUE executing a click action: " + e.getMessage();
+            return Feedback.issue("Executing a click action: " + e.getMessage());
         }
     }
 
     @Override
-    public String executeFillAction(String bddStep, String rawCssSelector, String fillText) {
-        if (this.state == null) return "ISSUE: No web state-page initialized";
+    public Feedback executeFillAction(String bddStep, String rawCssSelector, String fillText) {
+        if (this.state == null) return Feedback.issue("No web state-page initialized.");
 
         addInfoLog("rawCssSelector: " + rawCssSelector);
 
         String cssSelector = normalizeCssSelector(rawCssSelector);
 
         if (cssSelector == null || cssSelector.trim().isEmpty()) {
-            addSevereLog("ISSUE with an invalid CSS selector: " + rawCssSelector);
-            return "ISSUE with an invalid CSS selector: " + rawCssSelector;
+            addSevereLog("ISSUE: Invalid CSS selector: " + rawCssSelector);
+            return Feedback.issue("Invalid CSS selector: " + rawCssSelector);
         }
 
         try {
@@ -251,8 +251,8 @@ public class PlaywrightMcpDriver implements McpInterface {
             PlaywrightWidget widget = state.getWidgetFromCssSelector(cssSelector);
 
             if (widget == null) {
-                addSevereLog("ISSUE because no matching element found for CSS selector: " + cssSelector);
-                return "ISSUE because no matching element found for CSS selector: " + cssSelector;
+                addSevereLog("ISSUE: No matching element found for CSS selector: " + cssSelector);
+                return Feedback.issue("No matching element found for CSS selector: " + cssSelector);
             }
 
             PlaywrightFill fillAction = new PlaywrightFill(widget, fillText);
@@ -263,24 +263,24 @@ public class PlaywrightMcpDriver implements McpInterface {
             String actionDescription = "Executed Fill Action " + fillText + " in the widget " + cssSelector;
             saveExecutedAction(actionDescription);
 
-            return actionDescription;
+            return Feedback.validContext(actionDescription);
         } catch (Exception e) {
             addSevereLog("Failed to execute action for selector: " + cssSelector + " - " + e.getMessage());
-            return "ISSUE executing a fill action: " + e.getMessage();
+            return Feedback.issue("Executing a fill action: " + e.getMessage());
         }
     }
 
     @Override
-    public String executeSelectAction(String bddStep, String rawCssSelector, String optionValue) {
-        if (this.state == null) return "ISSUE: No web state-page initialized";
+    public Feedback executeSelectAction(String bddStep, String rawCssSelector, String optionValue) {
+        if (this.state == null) return Feedback.issue("No web state-page initialized.");
 
         addInfoLog("rawCssSelector: " + rawCssSelector);
 
         String cssSelector = normalizeCssSelector(rawCssSelector);
 
         if (cssSelector == null || cssSelector.trim().isEmpty()) {
-            addSevereLog("ISSUE with an invalid CSS selector: " + rawCssSelector);
-            return "ISSUE with an invalid CSS selector: " + rawCssSelector;
+            addSevereLog("ISSUE: Invalid CSS selector: " + rawCssSelector);
+            return Feedback.issue("Invalid CSS selector: " + rawCssSelector);
         }
 
         try {
@@ -289,8 +289,8 @@ public class PlaywrightMcpDriver implements McpInterface {
             PlaywrightWidget widget = state.getWidgetFromCssSelector(cssSelector);
 
             if (widget == null) {
-                addSevereLog("ISSUE because no matching element found for CSS selector: " + cssSelector);
-                return "ISSUE because no matching element found for CSS selector: " + cssSelector;
+                addSevereLog("ISSUE: No matching element found for CSS selector: " + cssSelector);
+                return Feedback.issue("No matching element found for CSS selector: " + cssSelector);
             }
 
             PlaywrightSelect selectAction = new PlaywrightSelect(widget, optionValue);
@@ -301,10 +301,10 @@ public class PlaywrightMcpDriver implements McpInterface {
             String actionDescription = "Select value " + optionValue + " in the widget " + cssSelector;
             saveExecutedAction(actionDescription);
 
-            return actionDescription;
+            return Feedback.validContext(actionDescription);
         } catch (Exception e) {
             addSevereLog("Failed to execute select action for selector: " + cssSelector + " - " + e.getMessage());
-            return "ISSUE executing a select action: " + e.getMessage();
+            return Feedback.issue("Executing a select action: " + e.getMessage());
         }
     }
 
@@ -335,25 +335,25 @@ public class PlaywrightMcpDriver implements McpInterface {
     }
 
     @Override
-    public String checkExecutedActions() {
-        if(executedAction.isEmpty()) return "No executed actions yet!";
+    public Feedback checkExecutedActions() {
+        if(executedAction.isEmpty()) return Feedback.validContext("No executed actions yet!");
 
-        return String.join(", ", executedAction);
+        return Feedback.validContext(String.join(", ", executedAction));
     }
 
     @Override
-    public String getStateImage() {
+    public Feedback getStateImage() {
         try {
             byte[] screenshotBytes = state.getScreenshot();
-            return Base64.getEncoder().encodeToString(screenshotBytes);
+            return Feedback.validContext(Base64.getEncoder().encodeToString(screenshotBytes));
         } catch (Exception e){
             addSevereLog("Failed to obtain the getStateImage: " + e.getMessage());
-            return ""; // This empty string is used in the MCPAgent switch
+            return Feedback.validContext(""); // This empty string is used in the MCPAgent switch
         }
     }
 
-    public String getStateVisualText() {
-        if (this.state == null) return "ISSUE: No web state-page initialized";
+    public Feedback getStateVisualText() {
+        if (this.state == null) return Feedback.issue("No web state-page initialized.");
 
         List<String> widgetsContext = new ArrayList<>();
 
@@ -375,35 +375,35 @@ public class PlaywrightMcpDriver implements McpInterface {
             }
         } catch (PlaywrightException e) {
             addSevereLog("Failed to collect visible text of state elements: " + e.getMessage());
-            return "ISSUE trying to obtain visible text of state elements: " + e.getMessage();
+            return Feedback.issue("Trying to obtain visible text of state elements: " + e.getMessage());
         }
 
-        return String.join("\n", widgetsContext);
+        return Feedback.validContext(String.join("\n", widgetsContext));
     }
 
     @Override
-    public String addStepAssert(String bddStep, String assertText) {
-        if (this.state == null) return "ISSUE: No web state-page initialized";
+    public Feedback addStepAssert(String bddStep, String assertText) {
+        if (this.state == null) return Feedback.issue("No web state-page initialized.");
 
         // Verify that the LLM assertText can be used as locator for assertion
         Locator locator = state.getPage().locator("text=" + assertText);
         if (locator.count() == 0 ) {
-            return "ISSUE: The provided assert text to be used as locator does not match with any GUI web element. " +
-                    "Try again with a correct text locator.";
+            return Feedback.issue("The provided assert text to be used as locator does not match with any GUI web element. " +
+                    "Try again with a correct text locator.");
         }
         else if (locator.count() > 1) {
-            return "ISSUE: The provided assert text locator is not unique because matches more than one GUI web element";
+            return Feedback.issue("The provided assert text locator is not unique because matches more than one GUI web element");
         }
         else if (!locator.first().isVisible()) {
-            return "ISSUE: The assert text locator is correct but the GUI web element is not visible. " +
-                    "Try again with a correct text locator.";
+            return Feedback.issue("The assert text locator is correct but the GUI web element is not visible. " +
+                    "Try again with a correct text locator.");
         }
 
         // Save the execution steps when we have valid asserts for the BDD instructions
         dataWriter.addAssertTestStep(bddStep, state, assertText);
         dataWriter.saveExecutionSteps();
 
-        return "Assertion created successfully!";
+        return Feedback.validContext("Assertion created successfully!");
     }
 
     @Override

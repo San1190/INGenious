@@ -1,4 +1,4 @@
-﻿package com.ing.ide.main.testar.mcp;
+package com.ing.ide.main.testar.mcp;
 
 /**
  * Apply the BDD-step validation/tracking before delegating to the technical MCP driver.
@@ -14,81 +14,81 @@ public final class BddMcpValidator implements McpInterface {
     }
 
     @Override
-    public String loadWebURL(String bddStep, String url) {
-        String validation = tracker.validateBddStep(bddStep);
+    public Feedback loadWebURL(String bddStep, String url) {
+        Feedback validation = tracker.validateBddStep(bddStep);
         if (validation != null) return validation;
 
-        String result = mcpDriver.loadWebURL(bddStep, url);
+        Feedback result = mcpDriver.loadWebURL(bddStep, url);
         recordIfSuccess(bddStep, result);
         return result;
     }
 
     @Override
-    public String getCurrentURL() {
+    public Feedback getCurrentURL() {
         return mcpDriver.getCurrentURL();
     }
 
     @Override
-    public String navigateBack() {
+    public Feedback navigateBack() {
         return mcpDriver.navigateBack();
     }
 
     @Override
-    public String getStateInteractiveWidgets() {
+    public Feedback getStateInteractiveWidgets() {
         return mcpDriver.getStateInteractiveWidgets();
     }
 
     @Override
-    public String executeClickAction(String bddStep, String cssSelector) {
-        String validation = tracker.validateBddStep(bddStep);
+    public Feedback executeClickAction(String bddStep, String cssSelector) {
+        Feedback validation = tracker.validateBddStep(bddStep);
         if (validation != null) return validation;
 
-        String result = mcpDriver.executeClickAction(bddStep, cssSelector);
+        Feedback result = mcpDriver.executeClickAction(bddStep, cssSelector);
         recordIfSuccess(bddStep, result);
         return result;
     }
 
     @Override
-    public String executeFillAction(String bddStep, String cssSelector, String fillText) {
-        String validation = tracker.validateBddStep(bddStep);
+    public Feedback executeFillAction(String bddStep, String cssSelector, String fillText) {
+        Feedback validation = tracker.validateBddStep(bddStep);
         if (validation != null) return validation;
 
-        String result = mcpDriver.executeFillAction(bddStep, cssSelector, fillText);
+        Feedback result = mcpDriver.executeFillAction(bddStep, cssSelector, fillText);
         recordIfSuccess(bddStep, result);
         return result;
     }
 
     @Override
-    public String executeSelectAction(String bddStep, String cssSelector, String optionValue) {
-        String validation = tracker.validateBddStep(bddStep);
+    public Feedback executeSelectAction(String bddStep, String cssSelector, String optionValue) {
+        Feedback validation = tracker.validateBddStep(bddStep);
         if (validation != null) return validation;
 
-        String result = mcpDriver.executeSelectAction(bddStep, cssSelector, optionValue);
+        Feedback result = mcpDriver.executeSelectAction(bddStep, cssSelector, optionValue);
         recordIfSuccess(bddStep, result);
         return result;
     }
 
     @Override
-    public String checkExecutedActions() {
+    public Feedback checkExecutedActions() {
         return mcpDriver.checkExecutedActions();
     }
 
     @Override
-    public String getStateImage() {
+    public Feedback getStateImage() {
         return mcpDriver.getStateImage();
     }
 
     @Override
-    public String getStateVisualText() {
+    public Feedback getStateVisualText() {
         return mcpDriver.getStateVisualText();
     }
 
     @Override
-    public String addStepAssert(String bddStep, String assertText) {
-        String validation = tracker.validateBddStep(bddStep);
+    public Feedback addStepAssert(String bddStep, String assertText) {
+        Feedback validation = tracker.validateBddStep(bddStep);
         if (validation != null) return validation;
 
-        String result = mcpDriver.addStepAssert(bddStep, assertText);
+        Feedback result = mcpDriver.addStepAssert(bddStep, assertText);
         recordIfSuccess(bddStep, result);
         return result;
     }
@@ -98,8 +98,8 @@ public final class BddMcpValidator implements McpInterface {
         mcpDriver.stopTestExecution();
     }
 
-    private void recordIfSuccess(String bddStep, String result) {
-        if (result != null && !result.startsWith("ISSUE")) {
+    private void recordIfSuccess(String bddStep, Feedback result) {
+        if (result != null && !result.isIssue()) {
             tracker.saveExecutedBddStep(bddStep);
         }
     }

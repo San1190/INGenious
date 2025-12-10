@@ -1,4 +1,4 @@
-﻿package com.ing.ide.main.testar.mcp;
+package com.ing.ide.main.testar.mcp;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -23,24 +23,24 @@ public final class BddStepTracker {
                 .collect(Collectors.toList());
     }
 
-    public String validateBddStep(String bddStep) {
+    public Feedback validateBddStep(String bddStep) {
         if (bddStep == null || bddStep.trim().isEmpty()) {
-            return "ISSUE: Provided BDD step is empty or invalid.";
+            return Feedback.issue("The provided BDD step is empty or invalid.");
         }
 
         if (!isOriginalBddInstruction(bddStep)) {
-            return "ISSUE: Provided BDD step does not seem to match with original BDD instructions.";
+            return Feedback.issue("The provided BDD step does not seem to match with original BDD instructions.");
         }
 
         // If the step is not the latest and was already executed, the mapping is trying to be done with an old previous step
         if (!isLatestBddStep(bddStep) && hasExecutedBddStep(bddStep)) {
             String message = String.format(
-                    "ISSUE: The provided BDD step '%s' is not the current or a new step. " +
-                    "This may create a mismatched BDD assertion map. " + 
+                    "The provided BDD step '%s' is not the current or a new step. " +
+                    "This may create a mismatched BDD-action map. " + 
                     "Please refine the BDD step or just continue with other appropiated BDD steps.",
                     bddStep
             );
-            return message;
+            return Feedback.issue(message);
         }
 
         return null;
