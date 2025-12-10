@@ -47,7 +47,7 @@ public class LlmMcpAgent {
         this.maxActions = maxActions;
         this.bddInstructions = bddInstructions;
 
-        this.mcpInterface = new PlaywrightMcpDriver(project);
+        this.mcpInterface = new PlaywrightMcpDriver(project, bddInstructions);
 
         this.client = new OkHttpClient.Builder()
                 .connectTimeout(30, TimeUnit.SECONDS)

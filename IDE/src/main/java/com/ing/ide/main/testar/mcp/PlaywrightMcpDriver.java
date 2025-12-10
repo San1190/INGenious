@@ -27,18 +27,20 @@ public class PlaywrightMcpDriver implements McpInterface {
     private PlaywrightState state;
 
     private final List<String> executedAction = new ArrayList<>();
+
+    private final List<String> originalBddInstructionsList;
     private final List<String> executedBddSteps = new ArrayList<>();
 
-    public PlaywrightMcpDriver(Project project) {
+    public PlaywrightMcpDriver(Project project, String originalBddInstructions) {
         // Initialize the data writer for saving OR objects and steps
         this.dataWriter = new TESTARDataWriter(project);
+        this.originalBddInstructionsList = parseBddInstructionList(originalBddInstructions);
     }
 
     @Override
     public String loadWebURL(String bddStep, String url){
-        if (checkBddStep(bddStep).isEmpty()) {
-            return "ISSUE: Provided BDD step is empty or invalid.";
-        }
+        String validateBddStep = validateBddStep(bddStep);
+        if (validateBddStep != null) return validateBddStep;
 
         try {
             this.system = new PlaywrightSUT(url);
@@ -205,9 +207,8 @@ public class PlaywrightMcpDriver implements McpInterface {
     public String executeClickAction(String bddStep, String rawCssSelector) {
         if (this.state == null) return "ISSUE: No web state-page initialized";
 
-        if (checkBddStep(bddStep).isEmpty()) {
-            return "ISSUE: Provided BDD step is empty or invalid.";
-        }
+        String validateBddStep = validateBddStep(bddStep);
+        if (validateBddStep != null) return validateBddStep;
 
         addInfoLog("rawCssSelector: " + rawCssSelector);
 
@@ -248,9 +249,8 @@ public class PlaywrightMcpDriver implements McpInterface {
     public String executeFillAction(String bddStep, String rawCssSelector, String fillText) {
         if (this.state == null) return "ISSUE: No web state-page initialized";
 
-        if (checkBddStep(bddStep).isEmpty()) {
-            return "ISSUE: Provided BDD step is empty or invalid.";
-        }
+        String validateBddStep = validateBddStep(bddStep);
+        if (validateBddStep != null) return validateBddStep;
 
         addInfoLog("rawCssSelector: " + rawCssSelector);
 
@@ -291,9 +291,8 @@ public class PlaywrightMcpDriver implements McpInterface {
     public String executeSelectAction(String bddStep, String rawCssSelector, String optionValue) {
         if (this.state == null) return "ISSUE: No web state-page initialized";
 
-        if (checkBddStep(bddStep).isEmpty()) {
-            return "ISSUE: Provided BDD step is empty or invalid.";
-        }
+        String validateBddStep = validateBddStep(bddStep);
+        if (validateBddStep != null) return validateBddStep;
 
         addInfoLog("rawCssSelector: " + rawCssSelector);
 
@@ -407,20 +406,8 @@ public class PlaywrightMcpDriver implements McpInterface {
     public String addStepAssert(String bddStep, String assertText) {
         if (this.state == null) return "ISSUE: No web state-page initialized";
 
-        if (checkBddStep(bddStep).isEmpty()) {
-            return "ISSUE: Provided BDD step is empty or invalid.";
-        }
-
-        // If the step is not the latest and was already executed, the mapping is trying to be done with an old previous step
-        if (!isLatestBddStep(bddStep) && hasExecutedBddStep(bddStep)) {
-            String message = String.format(
-                    "ISSUE: The provided BDD step '%s'is not the current or a new step. " +
-                    "This may create a mismatched BDD assertion map. Please just continue with the other BDD steps.",
-                    bddStep
-            );
-            addInfoLog(message);
-            return message;
-        }
+        String validateBddStep = validateBddStep(bddStep);
+        if (validateBddStep != null) return validateBddStep;
 
         // Verify that the LLM assertText can be used as locator for assertion
         Locator locator = state.getPage().locator("text=" + assertText);
@@ -467,8 +454,12 @@ public class PlaywrightMcpDriver implements McpInterface {
         );
     }
 
-    private String checkBddStep(String bddStep) {
-        return bddStep == null ? "" : bddStep.trim();
+    private List<String> parseBddInstructionList(String instructions) {
+        if (instructions == null || instructions.isBlank()) return Collections.emptyList();
+        return Arrays.stream(instructions.split("\\r?\\n"))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toList());
     }
 
     private void saveExecutedBddStep(String bddStep){
@@ -485,6 +476,33 @@ public class PlaywrightMcpDriver implements McpInterface {
     private boolean isLatestBddStep(String bddStep) {
         if (executedBddSteps.isEmpty()) return false;
         return executedBddSteps.get(executedBddSteps.size() - 1).equalsIgnoreCase(bddStep);
+    }
+
+    private String validateBddStep(String bddStep) {
+        if (bddStep == null || bddStep.trim().isEmpty()) {
+            return "ISSUE: Provided BDD step is empty or invalid.";
+        }
+
+        if (!isOriginalBddInstruction(bddStep)) {
+            return "ISSUE: Provided BDD step does not seem to match with original BDD instructions.";
+        }
+
+        // If the step is not the latest and was already executed, the mapping is trying to be done with an old previous step
+        if (!isLatestBddStep(bddStep) && hasExecutedBddStep(bddStep)) {
+            String message = String.format(
+                    "ISSUE: The provided BDD step '%s' is not the current or a new step. " +
+                    "This may create a mismatched BDD assertion map. " + 
+                    "Please refine the BDD step or just continue with other appropiated BDD steps.",
+                    bddStep
+            );
+            return message;
+        }
+
+        return null;
+    }
+
+    private boolean isOriginalBddInstruction(String bddStep) {
+        return originalBddInstructionsList.stream().anyMatch(instr -> instr.equalsIgnoreCase(bddStep));
     }
 
 }
