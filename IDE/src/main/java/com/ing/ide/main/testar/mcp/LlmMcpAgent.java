@@ -129,6 +129,7 @@ public class LlmMcpAgent {
                     String json = Objects.requireNonNull(response.body()).string();
 
                     Map<?, ?> parsed = mapper.readValue(json, Map.class);
+                    logTokenUsage((Map<?, ?>) parsed.get("usage"));
                     Map<?, ?> choice = ((List<Map<?, ?>>) parsed.get("choices")).get(0);
                     Map<?, ?> message = (Map<?, ?>) choice.get("message");
 
@@ -289,6 +290,28 @@ public class LlmMcpAgent {
                 java.util.logging.Level.SEVERE,
                 msg
         );
+    }
+
+    private Number asNumber(Object v) {
+        return v instanceof Number ? (Number) v : null;
+    }
+
+    private void logTokenUsage(Map<?, ?> usage) {
+        if (usage == null || usage.isEmpty()) {
+            addInfoLog("DEBUG tokens step: usage not provided by API");
+            return;
+        }
+
+        // Prompt tokens are the tokens that you input into the model (instructions + history + tool specs).
+        Number promptTokens = asNumber(usage.get("prompt_tokens"));
+        // Completion tokens are any tokens that the model generates in response to your input.
+        Number completionTokens = asNumber(usage.get("completion_tokens"));
+        // Sum of prompt + completion (plus any extra accounting fields the API might add). Use it to measure the cost per call.
+        Number totalTokens = asNumber(usage.get("total_tokens"));
+
+        addInfoLog("DEBUG tokens step: promptTokens=" + promptTokens +
+                ", completionTokens=" + completionTokens +
+                ", totalTokens=" + totalTokens);
     }
 
 }
