@@ -156,6 +156,25 @@
         '';
     },
 
+    isElementVisible: function (el) {
+      try {
+        if (!el || el.nodeType !== Node.ELEMENT_NODE) return false;
+        if (el.hasAttribute('hidden')) return false;
+
+        const style = window.getComputedStyle(el);
+        if (!style) return false;
+        if (style.display === 'none') return false;
+        if (style.visibility === 'hidden' || style.visibility === 'collapse') return false;
+        if (parseFloat(style.opacity || '1') === 0) return false;
+
+        const rect = el.getBoundingClientRect();
+        const hasArea = rect.width > 0 && rect.height > 0;
+        return hasArea;
+      } catch (e) {
+        return true;
+      }
+    },
+
     isModalElement: function (el) {
       if (!el || el.nodeType !== Node.ELEMENT_NODE) return false;
 
@@ -164,24 +183,30 @@
       const ariaModal = (el.getAttribute('aria-modal') || '').toLowerCase();
       const id = (el.id || '').toLowerCase();
       const className = (el.className || '').toString().toLowerCase();
+      const ariaHidden = (el.getAttribute('aria-hidden') || '').toLowerCase();
+
+      let looksLikeModal = false;
 
       // Explicit dialogs
-      if (tag === 'dialog') return true;
-      if (ariaModal === 'true') return true;
-      if (role === 'dialog' || role === 'alertdialog') return true;
+      if (tag === 'dialog') looksLikeModal = true;
+      if (ariaModal === 'true') looksLikeModal = true;
+      if (role === 'dialog' || role === 'alertdialog') looksLikeModal = true;
 
       const namePattern = id + ' ' + className;
       // Common naming patterns for modals / popups
       if (namePattern.includes('modal') ||
           namePattern.includes('popup') ||
           namePattern.includes('dialog')) {
-        return true;
+        looksLikeModal = true;
       }
       // Cookie banners / consent overlays
       if (namePattern.includes('cookie') || 
           namePattern.includes('consent')) {
-        return true;
+        looksLikeModal = true;
       }
+
+      if (!looksLikeModal) return false;
+      if (ariaHidden === 'true') return false;
 
       // Possible geometric + CSS heuristic to detect big overlay in front of everything
       /*try {
@@ -207,7 +232,7 @@
         // If something goes wrong, just don't treat it as modal
       }*/
 
-      return false;
+      return this.isElementVisible(el);
     },
 
     isInModal: function (el) {
