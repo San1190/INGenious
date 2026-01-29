@@ -144,8 +144,14 @@ public class PlaywrightDriverFactory {
                     if (!value.trim().equals(""))
                         launchOptions.setChromiumSandbox((boolean) getPropertyValueAsDesiredType(value));
                 } else if (key.toLowerCase().contains("setdevtools")) {
-                    if (!value.trim().equals(""))
-                        launchOptions.setDevtools((boolean) getPropertyValueAsDesiredType(value));
+                    if (!value.trim().equals("") && (boolean) getPropertyValueAsDesiredType(value)) {
+                        var args = new java.util.ArrayList<String>();
+                        if (launchOptions.args != null) args.addAll(launchOptions.args);
+                        if (!args.contains("--auto-open-devtools-for-tabs")) {
+                            args.add("--auto-open-devtools-for-tabs");
+                        }
+                        launchOptions.setArgs(args);
+                    }
                 } else if (key.toLowerCase().contains("setdownloadspath")) {
                     if (!value.trim().equals(""))
                         launchOptions.setDownloadsPath(Paths.get((String) getPropertyValueAsDesiredType(value)));
