@@ -1,6 +1,7 @@
 package com.ing.ide.main.testar;
 
 import com.ing.datalib.component.Project;
+import com.ing.datalib.component.Reusable;
 import com.ing.datalib.component.Scenario;
 import com.ing.datalib.component.TestCase;
 import com.ing.datalib.component.TestStep;
@@ -9,6 +10,7 @@ import com.ing.datalib.or.common.ObjectGroup;
 import com.ing.datalib.or.web.WebOR;
 import com.ing.datalib.or.web.WebORObject;
 import com.ing.datalib.or.web.WebORPage;
+import com.ing.ide.main.mainui.components.testdesign.tree.model.ReusableTreeModel;
 import com.ing.ide.main.testar.playwright.actions.PlaywrightClick;
 import com.ing.ide.main.testar.playwright.actions.PlaywrightFill;
 import com.ing.ide.main.testar.playwright.actions.PlaywrightSelect;
@@ -30,51 +32,69 @@ public class TESTARDataWriter {
     private final Project project;
     private final ObjectRepository objectRepository;
     private final WebOR webOR;
-    private final Scenario scenario;
+    private final Scenario bddScenario;
     private final TestCase mainTestCase;
+    private final String bddScenarioName;
 
-    private final Project reusableProject;
-    private final Scenario reusableScenario;
+    private final Scenario reusableStepScenario;
+    private final String REUSABLE_GROUP_NAME = "AI-BDD mapping";
 
-    public TESTARDataWriter(Project project) {
+    public TESTARDataWriter(Project project, String bddScenarioName) {
         // Prepare the INGenious Object Repository used to store steps information
         // This OR is common to all scenarios and test cases
         this.project = project;
+        this.bddScenarioName = bddScenarioName;
         objectRepository = new ObjectRepository(project);
         webOR = objectRepository.getWebOR();
         webOR.setObjectRepository(objectRepository);
 
-        // Prepare an INGenious Scenario in the Test Plan
+        // Prepare a high-level BDD Scenario in the Test Plan
+        this.bddScenario = setBddScenario();
 
-        // Create a new scenario version of the high-level MCP scenario
-        String defaultScenarioName = "MCP_scenario";
-        int defaultScenarioVersion = 1;
-        String scenarioName;
+        // Prepare a TestCase in the created high-level BDD Scenario
+        this.mainTestCase = setMainTestCase();
 
-        do {
-            scenarioName = defaultScenarioName + "_" + defaultScenarioVersion++;
-        } while ( this.project.getScenarioByName(scenarioName) != null);
+        // Prepare a resuable Scenario for low-level step definitions
+        this.reusableStepScenario = setResuableStepScenario();
+    }
 
-        this.scenario = new Scenario(this.project, scenarioName);
+    private Scenario setBddScenario() {
+        // Create a scenario version of the high-level BDD-MCP scenario
+        String bddScenarioName = "BDD-MCP_scenario";
+        // Attach the scenario to the Project instance, to be visible to reusable persistence.
+        Scenario createdBddScenario = this.project.addScenario(bddScenarioName);
+        return createdBddScenario != null ? createdBddScenario : this.project.getScenarioByName(bddScenarioName);
+    }
 
-        // Prepare an INGenious TestCase in the created high-level MCP scenario
+    private TestCase setMainTestCase() {
         String timestamp = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date());
-        this.mainTestCase = this.scenario.addTestCase(timestamp);
+        String scenarioPrefix = sanitizeScenarioName(bddScenarioName);
+        String testCaseName = scenarioPrefix.isEmpty()
+                ? timestamp
+                : scenarioPrefix + "_" + timestamp;
+        return this.bddScenario.addTestCase(testCaseName);
+    }
 
-        // Prepare an INGenious reusable project
-        this.reusableProject = new Project(project.getLocation());
-        this.reusableProject.setName("BDD mapping");
+    private String sanitizeScenarioName(String value) {
+        if (value == null) {
+            return "";
+        }
+        String trimmed = value.trim();
+        if (trimmed.isEmpty()) {
+            return "";
+        }
+        return trimmed.replaceAll("[\\\\/?:*\"|><]", "_");
+    }
 
+    private Scenario setResuableStepScenario() {
         // Prepare an INGenious low-level steps scenario to be a reusable component
-        String defaultStepsName = "StepsDefinition";
-        int defaultStepsVersion = 1;
-        String stepsName;
-
-        do {
-            stepsName = defaultStepsName + "_" + defaultStepsVersion++;
-        } while ( this.project.getScenarioByName(stepsName) != null);
-
-        this.reusableScenario = new Scenario(this.reusableProject, stepsName);
+        String resuableStepDefinitionsScenarioName = "StepDefinitions_" + this.mainTestCase.getName();
+        Scenario existingReusableStepScenario = this.project.getScenarioByName(resuableStepDefinitionsScenarioName);
+        if (existingReusableStepScenario != null) {
+            return existingReusableStepScenario;
+        }
+        Scenario created = this.project.addScenario(resuableStepDefinitionsScenarioName);
+        return created != null ? created : this.project.getScenarioByName(resuableStepDefinitionsScenarioName);
     }
 
     /** Add the action-element info into INGenious */
@@ -230,7 +250,7 @@ public class TESTARDataWriter {
             String reference
     ) {
         String bddStepParsed = bddStep.replaceAll("[\\\\/?:*\"|><]", "_");
-        String bddAction = this.reusableScenario.getName() + ":".concat(bddStepParsed);
+        String bddAction = this.reusableStepScenario.getName() + ":".concat(bddStepParsed);
 
         // First, create the abstract test step in the main test case of the test plan
         // Only if it does not already exist
@@ -246,17 +266,18 @@ public class TESTARDataWriter {
 
         // Second, create a test case in the reusable scenario
         // Only if it does not already exist
-        TestCase reusableTestCase = reusableScenario.getTestCaseByName(bddStepParsed);
+        TestCase reusableTestCase = reusableStepScenario.getTestCaseByName(bddStepParsed);
         if(reusableTestCase == null) {
-            reusableTestCase = reusableScenario.addTestCase(bddStepParsed);
+            reusableTestCase = reusableStepScenario.addTestCase(bddStepParsed);
         }
+        setReusableTestCase(reusableTestCase);
         TestStep concreteTestStep = reusableTestCase.addNewStep();
         concreteTestStep.setObject(object);
         concreteTestStep.setDescription(description);
         concreteTestStep.setAction(testAction);
         concreteTestStep.setInput(input);
         concreteTestStep.setReference(reference);
-        reusableTestCase.save(); // TODO: This is maybe not needed
+        reusableTestCase.save();
     }
 
     public void addConcreteTestStep(
@@ -346,16 +367,28 @@ public class TESTARDataWriter {
 
     public void saveExecutionSteps() {
         this.mainTestCase.save();
-        this.scenario.save();
+        this.bddScenario.save();
+        this.reusableStepScenario.save();
         this.objectRepository.save();
         this.project.save();
 
-        this.reusableScenario.save();
-        this.reusableProject.save();
-        // TODO: Check how to save this as reusable component
-        //ReusableTreeModel reusableTreeModel = new ReusableTreeModel();
-        //reusableTreeModel.setProject(this.reusableProject);
-        //reusableTreeModel.save();
+        ReusableTreeModel reusableTreeModel = new ReusableTreeModel();
+        reusableTreeModel.setProject(this.project);
+        reusableTreeModel.save();
+    }
+
+    private void setReusableTestCase(TestCase reusableTestCase) {
+        if (reusableTestCase == null) {
+            return;
+        }
+        Reusable reusable = reusableTestCase.getReusable();
+        if (reusable == null) {
+            reusable = new Reusable();
+            reusableTestCase.setReusable(reusable);
+        }
+        if (reusable.getGroup() == null || reusable.getGroup().trim().isEmpty()) {
+            reusable.setGroup(REUSABLE_GROUP_NAME);
+        }
     }
 
 }

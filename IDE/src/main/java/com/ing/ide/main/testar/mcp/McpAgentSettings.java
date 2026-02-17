@@ -8,7 +8,8 @@ public class McpAgentSettings {
     public Boolean vision;
     public String reasoningLevel;
     public Integer maxActions;
-    public String bddText;
+    public String bddScenarioName;
+    public String bddInstructions;
 
     // Jackson no-arg constructor
     public McpAgentSettings() { }

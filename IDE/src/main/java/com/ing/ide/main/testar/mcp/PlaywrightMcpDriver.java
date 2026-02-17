@@ -28,9 +28,9 @@ public class PlaywrightMcpDriver implements McpInterface {
 
     private final List<String> executedAction = new ArrayList<>();
 
-    public PlaywrightMcpDriver(Project project) {
+    public PlaywrightMcpDriver(Project project, String bddScenarioName) {
         // Initialize the data writer for saving OR objects and steps
-        this.dataWriter = new TESTARDataWriter(project);
+        this.dataWriter = new TESTARDataWriter(project, bddScenarioName);
     }
 
     @Override

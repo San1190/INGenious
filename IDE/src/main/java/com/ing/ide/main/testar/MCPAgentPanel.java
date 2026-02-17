@@ -2,6 +2,7 @@ package com.ing.ide.main.testar;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ing.ide.main.mainui.AppMainFrame;
+import com.ing.ide.main.mainui.components.testdesign.tree.model.ReusableTreeModel;
 import com.ing.ide.main.testar.mcp.LlmMcpAgent;
 import com.ing.ide.main.testar.mcp.McpAgentSettings;
 import com.ing.ide.settings.IconSettings;
@@ -23,7 +24,9 @@ public class MCPAgentPanel {
 	private static final Path SETTINGS_PATH = Paths.get(System.getProperty("user.home"), ".ingenious-mcp-settings.json");
 	private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
 
-	private String defaultBDDText =
+	private String defaultBDDName = "User should be able to log in to Parabank";
+
+	private String defaultBDDInstructions =
 			"Given the user navigates to the url 'https://para.testar.org/'\n" +
 			"When the user logs in with the john/demo credentials\n" +
 			"Then a welcome john smith message is shown";
@@ -47,7 +50,7 @@ public class MCPAgentPanel {
 		JPanel inputPanel = new JPanel();
 		inputPanel.setLayout(new BorderLayout());
 
-		JPanel formPanel = new JPanel(new GridLayout(6, 2, 5, 5));
+		JPanel formPanel = new JPanel(new GridLayout(7, 2, 5, 5));
 
 		JLabel apiUrlLabel = new JLabel("API URL:");
 		JTextField apiUrlField = new JTextField(100);
@@ -96,15 +99,23 @@ public class MCPAgentPanel {
 		formPanel.add(actionsLabel);
 		formPanel.add(actionsSpinner);
 
+		// Add a BDD Scenario name
+		JLabel bddScenarioNameLabel = new JLabel("BDD Scenario Name:");
+		JTextField bddScenarioNameField = new JTextField(40);
+		String bddScenarioNameDefault = settings.bddScenarioName != null ? settings.bddScenarioName : defaultBDDName;
+		bddScenarioNameField.setText(bddScenarioNameDefault);
+		formPanel.add(bddScenarioNameLabel);
+		formPanel.add(bddScenarioNameField);
+
 		inputPanel.add(formPanel, BorderLayout.NORTH);
 
 		// Add a BDD Instructions text area with scroll
 		JLabel bddLabel = new JLabel("BDD Instructions:");
-		String bddDefault = settings.bddText != null ? settings.bddText : defaultBDDText;
-		JTextArea bddTextArea = new JTextArea(bddDefault, 10, 40);
-		bddTextArea.setLineWrap(true);
-		bddTextArea.setWrapStyleWord(true);
-		JScrollPane bddScrollPane = new JScrollPane(bddTextArea);
+		String bddDefault = settings.bddInstructions != null ? settings.bddInstructions : defaultBDDInstructions;
+		JTextArea bddInstructionsTextArea = new JTextArea(bddDefault, 10, 40);
+		bddInstructionsTextArea.setLineWrap(true);
+		bddInstructionsTextArea.setWrapStyleWord(true);
+		JScrollPane bddScrollPane = new JScrollPane(bddInstructionsTextArea);
 
 		JPanel bddPanel = new JPanel(new BorderLayout());
 		bddPanel.add(bddLabel, BorderLayout.NORTH);
@@ -115,7 +126,7 @@ public class MCPAgentPanel {
 		// Create a panel for buttons
 		JPanel buttonPanel = new JPanel();
 		JButton launchButton = new JButton("Launch");
-		JButton closeButton = new JButton("Close");
+		JButton closeButton = new JButton("Save/Close");
 
 		Runnable saveFromUi = () -> {
 			settings.apiUrl = apiUrlField.getText().trim();
@@ -124,10 +135,12 @@ public class MCPAgentPanel {
 			settings.vision = visionCheckBox.isSelected();
 			settings.reasoningLevel = (String) reasoningCombo.getSelectedItem();
 			settings.maxActions = (Integer) actionsSpinner.getValue();
-			settings.bddText = bddTextArea.getText();
+			settings.bddScenarioName = bddScenarioNameField.getText().trim();
+			settings.bddInstructions = bddInstructionsTextArea.getText();
 
 			// keep in-memory default in sync as well
-			defaultBDDText = settings.bddText;
+			defaultBDDName = settings.bddScenarioName;
+			defaultBDDInstructions = settings.bddInstructions;
 
 			saveSettings(settings);
 		};
@@ -146,7 +159,8 @@ public class MCPAgentPanel {
 				boolean vision = visionCheckBox.isSelected();
 				String reasoningLevel = (String) reasoningCombo.getSelectedItem();
 				int maxActions = (Integer) actionsSpinner.getValue();
-				String bddInstructions = bddTextArea.getText();
+				String bddScenarioName = bddScenarioNameField.getText().trim();
+				String bddInstructions = bddInstructionsTextArea.getText();
 
 				LlmMcpAgent llmMcpAgent = new LlmMcpAgent(
 						sMainFrame.getProject(),
@@ -156,6 +170,7 @@ public class MCPAgentPanel {
 						vision,
 						reasoningLevel,
 						maxActions,
+						bddScenarioName,
 						bddInstructions
 				);
 
@@ -179,6 +194,7 @@ public class MCPAgentPanel {
 		closeButton.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				saveFromUi.run();
+				reloadReusableTree();
 				dialog.dispose();
 				sMainFrame.checkAndLoadRecent();
 			}
@@ -188,6 +204,7 @@ public class MCPAgentPanel {
 			@Override
 			public void windowClosing(java.awt.event.WindowEvent e) {
 				saveFromUi.run();
+				reloadReusableTree();
 				super.windowClosing(e);
 			}
 		});
@@ -237,6 +254,26 @@ public class MCPAgentPanel {
 			if (c instanceof Container) {
 				setComponentsEnabled((Container) c, enabled);
 			}
+		}
+	}
+
+	private void reloadReusableTree() {
+		try {
+			if (sMainFrame.getProject() == null || sMainFrame.getTestDesign() == null) {
+				return;
+			}
+			ReusableTreeModel model = sMainFrame.getTestDesign().getReusableTree().getTreeModel();
+			model.setProject(sMainFrame.getProject());
+			model.reload();
+		} catch (Exception ex) {
+			java.util.logging.Logger.getLogger(MCPAgentPanel.class.getName()).log(
+					java.util.logging.Level.SEVERE,
+					"Failed to reload the reusable tree from the project state"
+			);
+			java.util.logging.Logger.getLogger(MCPAgentPanel.class.getName()).log(
+					java.util.logging.Level.SEVERE,
+					ex.getMessage()
+			);
 		}
 	}
 

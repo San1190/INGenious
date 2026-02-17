@@ -33,6 +33,7 @@ public class LlmMcpAgent {
                        boolean vision,
                        String reasoningLevel,
                        int maxActions,
+                       String bddScenarioName,
                        String bddInstructions
                       ) {
 
@@ -48,7 +49,7 @@ public class LlmMcpAgent {
         this.bddInstructions = bddInstructions;
 
         // Wrap the technical MCP driver with the BDD steps validator
-        PlaywrightMcpDriver mcpDriver = new PlaywrightMcpDriver(project);
+        PlaywrightMcpDriver mcpDriver = new PlaywrightMcpDriver(project, bddScenarioName);
         this.mcpInterface = new BddMcpValidator(mcpDriver, new BddStepTracker(bddInstructions));
 
         this.client = new OkHttpClient.Builder()
