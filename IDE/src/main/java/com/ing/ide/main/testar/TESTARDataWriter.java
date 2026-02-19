@@ -10,6 +10,7 @@ import com.ing.datalib.or.common.ObjectGroup;
 import com.ing.datalib.or.web.WebOR;
 import com.ing.datalib.or.web.WebORObject;
 import com.ing.datalib.or.web.WebORPage;
+import com.ing.datalib.testdata.model.TestDataModel;
 import com.ing.ide.main.mainui.components.testdesign.tree.model.ReusableTreeModel;
 import com.ing.ide.main.testar.playwright.actions.PlaywrightClick;
 import com.ing.ide.main.testar.playwright.actions.PlaywrightFill;
@@ -25,6 +26,8 @@ import org.testar.monkey.alayer.Tags;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.List;
+import java.util.Objects;
 import java.util.function.Function;
 
 public class TESTARDataWriter {
@@ -275,7 +278,7 @@ public class TESTARDataWriter {
         concreteTestStep.setObject(object);
         concreteTestStep.setDescription(description);
         concreteTestStep.setAction(testAction);
-        concreteTestStep.setInput(input);
+        concreteTestStep.setInput(createTestDataInput(input, object, testAction));
         concreteTestStep.setReference(reference);
         reusableTestCase.save();
     }
@@ -291,7 +294,7 @@ public class TESTARDataWriter {
         concreteTestStep.setObject(object);
         concreteTestStep.setDescription(description);
         concreteTestStep.setAction(testAction);
-        concreteTestStep.setInput(input);
+        concreteTestStep.setInput(createTestDataInput(input, object, testAction));
         concreteTestStep.setReference(reference);
     }
 
@@ -388,6 +391,109 @@ public class TESTARDataWriter {
         }
         if (reusable.getGroup() == null || reusable.getGroup().trim().isEmpty()) {
             reusable.setGroup(REUSABLE_GROUP_NAME);
+        }
+    }
+
+    private String createTestDataInput(String input, String object, String testAction) {
+        if (input == null 
+            || input.trim().isEmpty() 
+            || !input.trim().startsWith("@")
+            || input.trim().substring(1).isEmpty()) {
+            return input;
+        }
+
+        // Extract the value from the provided data input @john -> john
+        String inputValue = input.trim().substring(1);
+
+        // The sheet data name is the same as the one created in the BDD-MCP scenario
+        String sheetDataName = mainTestCase.getName();
+        // Identify the column data by combining the ObjectName and Action
+        // TODO: Determine is this is a reliable unique column name or refactor it
+        String columnDataName = object + "_" + testAction; // e.g., (Browser_Open, username[input]_Fill, etc.)
+
+        try {
+            TestDataModel testDataModel = project.getTestData().defData().getByName(sheetDataName);
+            if (testDataModel == null) {
+                testDataModel = project.getTestData().defData().addTestData();
+                testDataModel.rename(sheetDataName);
+                // remove these default data columns
+                testDataModel.removeColumn("Data1");
+                testDataModel.removeColumn("Data2");
+            }
+            testDataModel.loadTableModel();
+
+            int rowIndex = findOrCreateDataRow(testDataModel);
+            String columnDataField = findOrCreateColumnDataField(testDataModel, columnDataName, inputValue, rowIndex);
+
+            int colIndex = testDataModel.getColumnIndex(columnDataField);
+            if (colIndex >= 0) {
+                testDataModel.setValueAt(inputValue, rowIndex, colIndex);
+            }
+
+            return sheetDataName + ":" + columnDataField;
+        } catch (Exception ex) {
+            java.util.logging.Logger.getLogger(TESTARDataWriter.class.getName()).log(
+                    java.util.logging.Level.WARNING,
+                    "Failed to associate input with test data; leaving literal input as-is: " + ex.getMessage()
+            );
+            return input;
+        }
+    }
+
+    private int findOrCreateDataRow(TestDataModel testDataModel) {
+        String scenarioName = bddScenario.getName();
+        String testCaseName = mainTestCase.getName();
+        String iteration = "1";
+        String subIteration = "1";
+
+        // If the first four identification columns exist, return the existing row
+        List<?> records = testDataModel.getRecords();
+        for (int i = 0; i < records.size(); i++) {
+            Object recordObj = records.get(i);
+            if (recordObj instanceof List) {
+                List<?> record = (List<?>) recordObj;
+                if (record.size() >= 4
+                        && scenarioName.equals(String.valueOf(record.get(0)))
+                        && testCaseName.equals(String.valueOf(record.get(1)))
+                        && iteration.equals(String.valueOf(record.get(2)))
+                        && subIteration.equals(String.valueOf(record.get(3)))) {
+                    return i;
+                }
+            }
+        }
+
+        // If the row does not exist, create it with the four identified columns
+        testDataModel.addRecord();
+        int rowIndex = Math.max(0, testDataModel.getRowCount() - 1);
+        testDataModel.setValueAt(scenarioName, rowIndex, testDataModel.getColumnIndex("Scenario"));
+        testDataModel.setValueAt(testCaseName, rowIndex, testDataModel.getColumnIndex("Flow"));
+        testDataModel.setValueAt(iteration, rowIndex, testDataModel.getColumnIndex("Iteration"));
+        testDataModel.setValueAt(subIteration, rowIndex, testDataModel.getColumnIndex("SubIteration"));
+        return rowIndex;
+    }
+
+    private String findOrCreateColumnDataField(TestDataModel testDataModel, String columnDataName, String inputValue, int rowIndex) {
+        String columnDataField = columnDataName;
+        int suffix = 2;
+
+        while (true) {
+            // If the column data field does not exist in the row, create it
+            // E.g., add a new non existing column data field (username[input]_Fill)
+            if (!testDataModel.hasColumn(columnDataField)) {
+                testDataModel.addColumn(columnDataField);
+                return columnDataField;
+            }
+            // If the column data field exists in the row, check the input value
+            int colIndex = testDataModel.getColumnIndex(columnDataField);
+            String existing = Objects.toString(testDataModel.getValueAt(rowIndex, colIndex), "").trim();
+            // If the input value is empty or is the same, just return the column data field
+            // E.g., return an existing column data field (username[input]_Fill == john)
+            if (existing.isEmpty() || existing.equals(inputValue)) {
+                return columnDataField;
+            }
+            // Else, an existing column data field exists, so we need to create a unique one
+            // E.g., try to create a new unique column data field for (username[input]_Fill_2)
+            columnDataField = columnDataName + "_" + suffix++;
         }
     }
 
