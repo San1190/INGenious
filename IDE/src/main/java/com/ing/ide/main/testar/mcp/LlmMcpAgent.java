@@ -6,214 +6,291 @@ import com.ing.datalib.component.Project;
 import com.ing.ide.main.testar.mcp.helper.McpNames;
 import com.ing.ide.main.testar.mcp.helper.McpToolBuilder;
 import com.ing.ide.main.testar.mcp.helper.McpToolExecutor;
-import okhttp3.*;
 
 import java.util.*;
-import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
+/**
+ * LLM-based Model Context Protocol (MCP) Agent for BDD-GUI testing.
+ * 
+ * <p>
+ * This class orchestrates the interaction between a Large Language Model (LLM)
+ * and the MCP interface to execute BDD (Behavior-Driven Development) test
+ * scenarios
+ * on web applications using GUI automation.
+ * </p>
+ * 
+ * <h2>Multi-LLM Architecture</h2>
+ * <p>
+ * This class is part of a <strong>Strategy Pattern</strong> implementation that
+ * supports
+ * multiple LLM providers for the following business reasons:
+ * </p>
+ * <ul>
+ * <li><strong>GDPR Compliance</strong>: Switch to privacy-focused or on-premise
+ * models</li>
+ * <li><strong>Cost Optimization</strong>: Use different providers based on
+ * pricing</li>
+ * <li><strong>Flexibility</strong>: Easy integration of new LLM providers</li>
+ * </ul>
+ * 
+ * <p>
+ * The LLM provider is abstracted via the {@link LlmProvider} interface,
+ * allowing
+ * seamless switching between OpenAI, Google Gemini, Meta Llama, or any other
+ * provider
+ * without modifying this class.
+ * </p>
+ * 
+ * <h2>Supported Providers</h2>
+ * <ul>
+ * <li>{@link OpenAiProvider} - OpenAI and Azure OpenAI</li>
+ * <li>GeminiProvider - Google Gemini (future)</li>
+ * <li>LlamaProvider - Meta Llama via local or cloud (future)</li>
+ * </ul>
+ * 
+ * @author TFG-MCP-TESTAR Team
+ * @version 2.0
+ * @since 2024
+ * @see LlmProvider
+ * @see OpenAiProvider
+ * @see McpInterface
+ */
 public class LlmMcpAgent {
 
-    private final OkHttpClient client;
+    private static final Logger LOGGER = Logger.getLogger(LlmMcpAgent.class.getName());
+
     private final ObjectMapper mapper = new ObjectMapper();
 
-    private final String openaiApiUrl;
-    private final String openaiApiKey;
-    private final String openaiModel;
-    private final boolean vision;
-    private final String reasoningLevel;
+    /** The LLM provider implementing the Strategy pattern */
+    private final LlmProvider aiProvider;
+
     private final int maxActions;
     private final String bddInstructions;
-
     private final McpInterface mcpInterface;
 
+    /**
+     * Constructs a new LlmMcpAgent with the specified configuration.
+     * 
+     * <p>
+     * This constructor creates an {@link OpenAiProvider} as the default LLM
+     * provider.
+     * To use a different provider, use the alternative constructor that accepts
+     * a {@link LlmProvider} instance.
+     * </p>
+     * 
+     * @param project              the INGenious project context
+     * @param openaiApiUrl         the OpenAI API endpoint URL
+     * @param openaiApiKeyVariable the name of the environment variable containing
+     *                             the API key
+     * @param openaiModel          the model identifier (e.g., "gpt-4o")
+     * @param vision               whether vision/image input is enabled
+     * @param reasoningLevel       the reasoning effort level for reasoning models
+     * @param maxActions           maximum number of LLM actions before stopping
+     * @param bddInstructions      the BDD instructions to execute
+     * @throws IllegalStateException if the API key environment variable is not set
+     */
     public LlmMcpAgent(Project project,
-                       String openaiApiUrl,
-                       String openaiApiKeyVariable,
-                       String openaiModel,
-                       boolean vision,
-                       String reasoningLevel,
-                       int maxActions,
-                       String bddScenarioName,
-                       String bddInstructions
-                      ) {
+            String openaiApiUrl,
+            String openaiApiKeyVariable,
+            String openaiModel,
+            boolean vision,
+            String reasoningLevel,
+            int maxActions,
+            String bddInstructions) {
 
-        this.openaiApiUrl = openaiApiUrl;
-        this.openaiApiKey = System.getenv(openaiApiKeyVariable);
-        if (openaiApiKey == null || openaiApiKey.isEmpty()) {
-            throw new IllegalStateException("Environment variable '" + openaiApiKeyVariable + "' is not set or is empty.");
+        String apiKey = System.getenv(openaiApiKeyVariable);
+        if (apiKey == null || apiKey.isEmpty()) {
+            throw new IllegalStateException(
+                    "Environment variable '" + openaiApiKeyVariable + "' is not set or is empty.");
         }
-        this.openaiModel = openaiModel;
-        this.vision = vision;
-        this.reasoningLevel = reasoningLevel;
+
+        // Initialize the LLM provider using the Strategy pattern
+        this.aiProvider = new OpenAiProvider(
+                openaiApiUrl,
+                apiKey,
+                openaiModel,
+                vision,
+                reasoningLevel);
+
         this.maxActions = maxActions;
         this.bddInstructions = bddInstructions;
 
         // Wrap the technical MCP driver with the BDD steps validator
-        PlaywrightMcpDriver mcpDriver = new PlaywrightMcpDriver(project, bddScenarioName);
+        PlaywrightMcpDriver mcpDriver = new PlaywrightMcpDriver(project, bddInstructions);
         this.mcpInterface = new BddMcpValidator(mcpDriver, new BddStepTracker(bddInstructions));
-
-        this.client = new OkHttpClient.Builder()
-                .connectTimeout(30, TimeUnit.SECONDS)
-                .writeTimeout(120, TimeUnit.SECONDS)
-                .readTimeout(20, TimeUnit.MINUTES)
-                .retryOnConnectionFailure(true)
-                .build();
     }
 
+    /**
+     * Constructs a new LlmMcpAgent with a custom LLM provider.
+     * 
+     * <p>
+     * This constructor allows injecting any {@link LlmProvider} implementation,
+     * enabling support for different LLM backends (Gemini, Llama, etc.).
+     * </p>
+     * 
+     * @param project         the INGenious project context
+     * @param aiProvider      the LLM provider to use
+     * @param maxActions      maximum number of LLM actions before stopping
+     * @param bddInstructions the BDD instructions to execute
+     */
+    public LlmMcpAgent(Project project,
+            LlmProvider aiProvider,
+            int maxActions,
+            String bddInstructions) {
+
+        this.aiProvider = aiProvider;
+        this.maxActions = maxActions;
+        this.bddInstructions = bddInstructions;
+
+        // Wrap the technical MCP driver with the BDD steps validator
+        PlaywrightMcpDriver mcpDriver = new PlaywrightMcpDriver(project, bddInstructions);
+        this.mcpInterface = new BddMcpValidator(mcpDriver, new BddStepTracker(bddInstructions));
+    }
+
+    /**
+     * Executes the LLM agent loop to complete the BDD test scenario.
+     * 
+     * <p>
+     * The agent iteratively:
+     * </p>
+     * <ol>
+     * <li>Sends the current conversation state to the LLM</li>
+     * <li>Receives tool calls from the LLM</li>
+     * <li>Executes the requested tools via {@link McpInterface}</li>
+     * <li>Adds tool results to the conversation</li>
+     * <li>Repeats until completion or maxActions reached</li>
+     * </ol>
+     * 
+     * @return a status message indicating how the agent terminated
+     */
     public String runLLMAgent() {
-        // Prepare the messages and tools data to be sent to the LLM
-        final List<Map<String, Object>> messages = defineMessages();
+        // Register the available tools with the LLM provider
         final List<Map<String, Object>> tools = McpToolBuilder.from(McpInterface.class);
+        aiProvider.registerTools(tools);
+
         final McpToolExecutor<McpInterface> executor = McpToolExecutor.of(McpInterface.class, mcpInterface, mapper);
 
+        // This is the "Split + Verbose" strategy base prompt
+        final String baseSystemPrompt = "You are a strict BDD-GUI test strategy agent for INGenious MCP.\n" +
+                "You must analyze the User Context (DOM state) to perform actions on the GUI step by step.\n" +
+                "Your objective is to complete the BDD instructions provided.\n\n" +
+                "CRITICAL INSTRUCTION - SPLIT + VERBOSE STRATEGY:\n" +
+                "You MUST return your response ONLY as a valid JSON object raw (no markdown backticks). " +
+                "Your JSON MUST contain exactly two top-level keys: \"thought\" and \"action\".\n" +
+                "- \"thought\": A verbose explanation of your analysis of the current GUI state, why you chose the web element, and how it aligns with the current BDD step.\n"
+                +
+                "- \"action\": A JSON object describing the tool to execute. It must contain \"toolName\" (string) and \"parameters\" (an object with key-value pairs matching the exact arguments for the chosen tool).\n\n"
+                +
+                "Example Format:\n" +
+                "{\n" +
+                "  \"thought\": \"I am observing the DOM. I see the 'Login' button with CSS selector '#login'. Since the BDD says 'When the user logs in', I will click this button.\",\n"
+                +
+                "  \"action\": {\n" +
+                "    \"toolName\": \"executeClickAction\",\n" +
+                "    \"parameters\": {\n" +
+                "      \"bddStep\": \"When the user logs in\",\n" +
+                "      \"rawCssSelector\": \"#login\"\n" +
+                "    }\n" +
+                "  }\n" +
+                "}\n\n" +
+                "Use ONLY the tools provided to you. If you complete all asserts or test execution must end, use the stopTestExecution tool. Begin!";
+
         int step = 0;
-        boolean visionRequest = false; // this (sticky) flag indicates vision should be enabled
+
+        // At the beginning, the context is the BDD list itself
+        String currentUserContext = "Initial state. BDD Instructions to accomplish:\n" + this.bddInstructions
+                + "\nStart by loading the URL.";
 
         while (step < this.maxActions) {
-            Map<String, Object> body = new HashMap<>();
+            try {
+                addInfoLog("\n--- INFERENCING STEP: " + step + " ---");
 
-            // modes, tools, tool_choice, reasoning_effort first as they are 'static' content (reusing the KV cache)
-            body.put("model", openaiModel);
-            body.put("tools", tools);
-            body.put("tool_choice", "auto");
-            if (isReasoningModel(openaiModel)) {
-                body.put("reasoning_effort", reasoningLevel);
-            }
+                // Track Latency for RQ3 metric
+                long startTime = System.currentTimeMillis();
 
-            // put messages last as this is 'variable' content
-            body.put("messages", messages);
+                // Call the LLM provider (Strategy pattern)
+                String jsonResponse = aiProvider.executePrompt(baseSystemPrompt, currentUserContext);
 
-            try (Response response = client.newCall(
-                    new Request.Builder()
-                            .url(openaiApiUrl)
-                            .header("Authorization", "Bearer " + openaiApiKey)
-                            .header("Content-Type", "application/json")
-                            .header("Copilot-Vision-Request", "" + visionRequest)
-                            .post(RequestBody.create(MediaType.parse("application/json"), mapper.writeValueAsString(body)))
-                            .build()
-            ).execute()) {
+                long endTime = System.currentTimeMillis();
+                long latencyMs = endTime - startTime;
 
-                if (!response.isSuccessful()) {
-                    if (response.code() == 429) {
-                        String retryAfter = response.header("Retry-After");
-                        long waitTime = 10000L; // default 10 seconds
+                addInfoLog(String.format("LLM Inference Latency: %d ms (Provider: %s)", latencyMs,
+                        aiProvider.getModelName()));
 
-                        if (retryAfter != null) {
-                            try {
-                                waitTime = Long.parseLong(retryAfter) * 1333L; // conversion with 33% margin
-                            } catch (NumberFormatException e) {
-                                addSevereLog("Invalid Retry-After header value: " + retryAfter);
-                            }
-                        }
+                // Parse the response based on the Split + Verbose schema
+                Map<?, ?> parsedResponse;
+                try {
+                    parsedResponse = mapper.readValue(jsonResponse, Map.class);
+                } catch (JsonProcessingException e) {
+                    addSevereLog("The LLM failed to return a proper JSON. Attempting recovery...");
+                    addSevereLog("Raw Output: " + jsonResponse);
+                    currentUserContext = "ERROR: Your last response was not valid JSON. You MUST return ONLY a JSON object with 'thought' and 'action' keys. Try again.";
+                    continue;
+                }
 
-                        addInfoLog("OpenAI rate limited (429)... wait " + (waitTime / 1000) + " seconds...");
+                String thought = (String) parsedResponse.get("thought");
+                Map<?, ?> action = (Map<?, ?>) parsedResponse.get("action");
+
+                if (action == null || !action.containsKey("toolName")) {
+                    String feedback = "ISSUE: No 'action' block or 'toolName' provided. Please review.";
+                    addSevereLog(feedback);
+                    currentUserContext = "Error: Invalid JSON schema. 'action' block missing or 'toolName' empty. Follow strictly the format.";
+                    continue;
+                }
+
+                String toolName = (String) action.get("toolName");
+                Map<?, ?> paramsMap = (Map<?, ?>) action.get("parameters");
+                String argumentsJson = mapper.writeValueAsString(paramsMap != null ? paramsMap : new HashMap<>());
+
+                addInfoLog("THOUGHT: " + thought);
+                addInfoLog("ACTION: " + toolName);
+                addInfoLog("PARAMETERS: " + argumentsJson);
+
+                Object resultObj = executor.execute(toolName, argumentsJson);
+                String result = (resultObj == null) ? "null" : resultObj.toString();
+
+                if (McpNames.of(McpInterface::stopTestExecution).equals(toolName)) {
+                    addInfoLog("LLM agent decided to stop the test execution.");
+                    return "LLM agent decided to stop the test execution";
+                }
+
+                boolean requireStateImage = McpNames.of(McpInterface::getStateImage).equals(toolName);
+
+                if (requireStateImage && !result.isEmpty() && aiProvider.supportsVision()) {
+                    addInfoLog("VISION REQUEST: Model supports vision, obtaining image frame...");
+                    currentUserContext = "Action executing " + toolName
+                            + " resulted in: [Base64 Image Attached]. Use the returned DOM and state interactive widgets to continue the BDD.";
+                } else {
+                    addInfoLog("DEBUG tool result: " + result);
+                    // Next user text will be the outcome of the tool or the DOM state
+                    currentUserContext = "Result of the previous action '" + toolName + "':\n" + result
+                            + "\nAnalyze this consequence and plan your next action to follow the BDD.";
+                }
+
+                // Append general BDD instructions reminder to the context loop
+                currentUserContext += "\n\nPending BDD:\n" + this.bddInstructions;
+
+                step++;
+
+            } catch (LlmProviderException e) {
+                if (e.isRateLimited()) {
+                    long waitTime = e.getRetryAfterMs();
+                    addInfoLog("Rate limited... waiting " + (waitTime / 1000) + " seconds...");
+                    try {
                         Thread.sleep(waitTime);
-                    } else {
-                        String failed = "Stop execution due to OpenAI call fail: " + response.code();
-                        addSevereLog(failed);
-                        try {
-                            String request_body = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(body);
-                            addSevereLog("request headers: " + response.request().headers().toString());
-                            addSevereLog("request body: " + request_body);
-                            addSevereLog("response: " + response.body().string());
-
-                            return failed;
-                        } catch (JsonProcessingException e) {
-                            addSevereLog("JSON processing failed" + e.getMessage());
-                        }
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        return "Execution interrupted";
                     }
                 } else {
-                    List<Map<String, Object>> toolCallResultMessages = new ArrayList<>();
-                    List<Map<String, Object>> userMessages = new ArrayList<>();
-
-                    // if response is successful
-                    String json = Objects.requireNonNull(response.body()).string();
-
-                    Map<?, ?> parsed = mapper.readValue(json, Map.class);
-                    logTokenUsage((Map<?, ?>) parsed.get("usage"));
-                    Map<?, ?> choice = ((List<Map<?, ?>>) parsed.get("choices")).get(0);
-                    Map<?, ?> message = (Map<?, ?>) choice.get("message");
-
-                    messages.add((Map<String, Object>) message);
-
-                    // Read all tool_calls (array)
-                    List<Map<?, ?>> toolCalls = (List<Map<?, ?>>) message.get("tool_calls");
-
-                    // Empty toolCalls response. Don't stop, give the LLM another chance
-                    if (toolCalls == null || toolCalls.isEmpty()) {
-                        String feedback = "ISSUE: No tool was selected. Please review the last results.";
-                        addInfoLog(feedback);
-                        userMessages.add(Map.of(
-                                "role", "user",
-                                "content", "Reminder: choose a valid tool to proceed."
-                        ));
-                        continue;
-                    }
-
-                    // Execute all tool calls
-                    for (Map<?, ?> toolCall : toolCalls) {
-                        String callId = (String) toolCall.get("id");
-                        Map<?, ?> function = (Map<?, ?>) toolCall.get("function");
-                        String toolName = (String) function.get("name");
-                        String argumentsJson = (String) function.get("arguments");
-
-                        addInfoLog("DEBUG toolName: " + toolName);
-                        addInfoLog("DEBUG argumentsJson: " + argumentsJson);
-
-                        Object resultObj = executor.execute(toolName, argumentsJson);
-                        String result = (resultObj == null) ? "null" : resultObj.toString();
-
-                        // Check if stop the execution due to the LLM decision
-                        if (McpNames.of(McpInterface::stopTestExecution).equals(toolName)) {
-                            addInfoLog("LLM agent decided to stop the test execution");
-                            return "LLM agent decided to stop the test execution";
-                        }
-
-                        // Reply to this tool call first
-                        boolean requireStateImage = McpNames.of(McpInterface::getStateImage).equals(toolName);
-                        String toolContent = requireStateImage ? "screenshot_ready" : result;
-                        toolCallResultMessages.add(Map.of(
-                                "role", "tool",
-                                "tool_call_id", callId,
-                                "content", toolContent
-                        ));
-
-                        // If required, additionally add the image user message
-                        if (requireStateImage && !result.isEmpty() && supportsVision(openaiModel)) {
-                            addInfoLog("VISION REQUEST: attaching state image");
-                            attachStateImage(userMessages, result);
-                            visionRequest = true;
-                        } else if (requireStateImage && !result.isEmpty()) {
-                            addInfoLog("VISION REQUEST: is omitted for this model or by the user");
-                            userMessages.add(Map.of(
-                                    "role", "user",
-                                    "content", "Screenshot captured (omitted for this model)."
-                            ));
-                            // add vision request for the next iteration
-                        } else {
-                            // This is only for debugging purposes
-                            addInfoLog("DEBUG result: " + result);
-                        }
-                    }
-
-                    // Tool results first
-                    messages.addAll(toolCallResultMessages);
-                    // User messages second
-                    messages.addAll(userMessages);
-
-                    // step if there are no exceptions
-                    step++;
+                    addSevereLog("LLM provider error: " + e.getMessage());
+                    return "Stop execution due to LLM provider error: " + e.getHttpStatusCode();
                 }
             } catch (Exception e) {
-                try {
-                    String request = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(body);
-                    addSevereLog("LLM step failed: " + e.getMessage());
-                    addSevereLog("request: " + request);
-                    e.printStackTrace();
-                } catch (JsonProcessingException ex) {
-                    addSevereLog("JSON processing failed" + ex.getMessage());
-                }
-
+                addSevereLog("LLM step failed: " + e.getMessage());
+                e.printStackTrace();
             }
         }
 
@@ -222,97 +299,11 @@ public class LlmMcpAgent {
         return "maxAction executed";
     }
 
-    private List<Map<String, Object>> defineMessages() {
-        List<Map<String, Object>> messages = new ArrayList<>();
-
-        messages.add(Map.of(
-                "role", "system",
-                "content", "You are a BDD-GUI test agent. " +
-                        "Your goal is to complete the BDD instructions. " +
-                        "Use loadWebURL, getStateInteractiveWidgets, executeClickAction, executeFillAction, and executeSelectAction functions. " +
-                        "Use getCurrentURL and checkExecutedActions functions if you need assistance. " +
-                        "Use navigateBack function if you need to control the web browser. " +
-                        "After completing each BDD step (Given, When, Then), use (getStateImage or getStateVisualText) and addStepAssert functions to validate that step. " +
-                        "When asserting all BDD instructions, use the stopTestExecution function.")
-        );
-
-        messages.add(Map.of(
-                "role", "user",
-                "content", "Begin by load the web url to be tested.")
-        );
-
-        messages.add(Map.of(
-                "role", "user",
-                "content", "Get the current GUI state to obtain the available web elements.")
-        );
-
-        messages.add(Map.of(
-                "role", "user",
-                "content", this.bddInstructions)
-        );
-
-        return messages;
-    }
-
-    private boolean supportsVision(String model) {
-        String m = model == null ? "" : model.toLowerCase();
-        return vision && (m.contains("gpt-4o") || m.contains("gpt-4.1") || m.contains("gpt-5"));
-    }
-
-    private boolean isReasoningModel(String model) {
-        if (model == null) return false;
-        String m = model.toLowerCase();
-        return m.startsWith("gpt-5");
-    }
-
-    private static void attachStateImage(List<Map<String, Object>> messages, String base64Png) {
-        Map<String, Object> imageMsg = new HashMap<>();
-        imageMsg.put("role", "user");
-
-        List<Map<String, Object>> content = new ArrayList<>();
-        content.add(Map.of("type", "text", "text", "Here is the current GUI state."));
-        Map<String, Object> imageUrl = new HashMap<>();
-        imageUrl.put("url", "data:image/png;base64," + base64Png);
-        content.add(Map.of("type", "image_url", "image_url", imageUrl));
-
-        imageMsg.put("content", content);
-        messages.add(imageMsg);
-    }
-
     private void addInfoLog(String msg) {
-        java.util.logging.Logger.getLogger(LlmMcpAgent.class.getName()).log(
-                java.util.logging.Level.INFO,
-                msg
-        );
+        LOGGER.log(Level.INFO, msg);
     }
 
     private void addSevereLog(String msg) {
-        java.util.logging.Logger.getLogger(LlmMcpAgent.class.getName()).log(
-                java.util.logging.Level.SEVERE,
-                msg
-        );
+        LOGGER.log(Level.SEVERE, msg);
     }
-
-    private Number asNumber(Object v) {
-        return v instanceof Number ? (Number) v : null;
-    }
-
-    private void logTokenUsage(Map<?, ?> usage) {
-        if (usage == null || usage.isEmpty()) {
-            addInfoLog("DEBUG tokens step: usage not provided by API");
-            return;
-        }
-
-        // Prompt tokens are the tokens that you input into the model (instructions + history + tool specs).
-        Number promptTokens = asNumber(usage.get("prompt_tokens"));
-        // Completion tokens are any tokens that the model generates in response to your input.
-        Number completionTokens = asNumber(usage.get("completion_tokens"));
-        // Sum of prompt + completion (plus any extra accounting fields the API might add). Use it to measure the cost per call.
-        Number totalTokens = asNumber(usage.get("total_tokens"));
-
-        addInfoLog("DEBUG tokens step: promptTokens=" + promptTokens +
-                ", completionTokens=" + completionTokens +
-                ", totalTokens=" + totalTokens);
-    }
-
 }

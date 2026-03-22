@@ -2,7 +2,6 @@ package com.ing.ide.main.testar;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ing.ide.main.mainui.AppMainFrame;
-import com.ing.ide.main.mainui.components.testdesign.tree.model.ReusableTreeModel;
 import com.ing.ide.main.testar.mcp.LlmMcpAgent;
 import com.ing.ide.main.testar.mcp.McpAgentSettings;
 import com.ing.ide.settings.IconSettings;
@@ -21,13 +20,11 @@ public class MCPAgentPanel {
 	private final AppMainFrame sMainFrame;
 
 	private McpAgentSettings settings;
-	private static final Path SETTINGS_PATH = Paths.get(System.getProperty("user.home"), ".ingenious-mcp-settings.json");
+	private static final Path SETTINGS_PATH = Paths.get(System.getProperty("user.home"),
+			".ingenious-mcp-settings.json");
 	private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
 
-	private String defaultBDDName = "User should be able to log in to Parabank";
-
-	private String defaultBDDInstructions =
-			"Given the user navigates to the url 'https://para.testar.org/'\n" +
+	private String defaultBDDText = "Given the user navigates to the url 'https://para.testar.org/'\n" +
 			"When the user logs in with the john/demo credentials\n" +
 			"Then a welcome john smith message is shown";
 
@@ -50,13 +47,28 @@ public class MCPAgentPanel {
 		JPanel inputPanel = new JPanel();
 		inputPanel.setLayout(new BorderLayout());
 
-		JPanel formPanel = new JPanel(new GridLayout(7, 2, 5, 5));
+		JPanel formPanel = new JPanel(new GridLayout(8, 2, 5, 5));
+
+		JLabel providerLabel = new JLabel("LLM Provider:");
+		String[] providers = { "OpenAI", "Gemini", "Local/Ollama" };
+		JComboBox<String> providerCombo = new JComboBox<>(providers);
+		String providerDefault = settings.llmProviderName != null ? settings.llmProviderName : "OpenAI";
+		providerCombo.setSelectedItem(providerDefault);
+		formPanel.add(providerLabel);
+		formPanel.add(providerCombo);
+
+		JLabel customUrlLabel = new JLabel("Custom API URL:");
+		JTextField customUrlField = new JTextField(100);
+		String customUrlDefault = settings.customApiUrl != null ? settings.customApiUrl : "";
+		customUrlField.setText(customUrlDefault);
+		formPanel.add(customUrlLabel);
+		formPanel.add(customUrlField);
 
 		JLabel apiUrlLabel = new JLabel("API URL:");
 		JTextField apiUrlField = new JTextField(100);
 		String apiUrlDefault = settings.apiUrl != null
 				? settings.apiUrl
-				: "https://api.githubcopilot.com/chat/completions";
+				: "https://api.openai.com/v1/chat/completions";
 		apiUrlField.setText(apiUrlDefault);
 		formPanel.add(apiUrlLabel);
 		formPanel.add(apiUrlField);
@@ -65,19 +77,19 @@ public class MCPAgentPanel {
 		JTextField apiKeyEnvVarField = new JTextField(40);
 		String apiEnvDefault = settings.apiKeyEnvVarName != null
 				? settings.apiKeyEnvVarName
-				: "GITHUB_TOKEN";
+				: "OPENAI_API_KEY";
 		apiKeyEnvVarField.setText(apiEnvDefault);
 		formPanel.add(apiKeyEnvVarLabel);
 		formPanel.add(apiKeyEnvVarField);
 
-		JLabel openaiLabel = new JLabel("OpenAI model:");
+		JLabel openaiLabel = new JLabel("Model:");
 		JTextField openaiTextField = new JTextField(40);
 		String modelDefault = settings.openaiModel != null ? settings.openaiModel : "gpt-4o";
 		openaiTextField.setText(modelDefault);
 		formPanel.add(openaiLabel);
 		formPanel.add(openaiTextField);
 
-		JLabel visionLabel = new JLabel("Vision:");
+		JLabel visionLabel = new JLabel("Vision (if applies):");
 		JCheckBox visionCheckBox = new JCheckBox("Enable vision");
 		boolean visionDefault = settings.vision != null ? settings.vision : false;
 		visionCheckBox.setSelected(visionDefault);
@@ -85,7 +97,7 @@ public class MCPAgentPanel {
 		formPanel.add(visionCheckBox);
 
 		JLabel reasoningLabel = new JLabel("Reasoning effort:");
-		String[] reasoningOptions = { "none", "minimal", "low", "medium", "high" };
+		String[] reasoningOptions = { "none", "low", "medium", "high" };
 		JComboBox<String> reasoningCombo = new JComboBox<>(reasoningOptions);
 		String reasoningDefault = settings.reasoningLevel != null ? settings.reasoningLevel : "none";
 		reasoningCombo.setSelectedItem(reasoningDefault);
@@ -99,23 +111,15 @@ public class MCPAgentPanel {
 		formPanel.add(actionsLabel);
 		formPanel.add(actionsSpinner);
 
-		// Add a BDD Scenario name
-		JLabel bddScenarioNameLabel = new JLabel("BDD Scenario Name:");
-		JTextField bddScenarioNameField = new JTextField(40);
-		String bddScenarioNameDefault = settings.bddScenarioName != null ? settings.bddScenarioName : defaultBDDName;
-		bddScenarioNameField.setText(bddScenarioNameDefault);
-		formPanel.add(bddScenarioNameLabel);
-		formPanel.add(bddScenarioNameField);
-
 		inputPanel.add(formPanel, BorderLayout.NORTH);
 
 		// Add a BDD Instructions text area with scroll
 		JLabel bddLabel = new JLabel("BDD Instructions:");
-		String bddDefault = settings.bddInstructions != null ? settings.bddInstructions : defaultBDDInstructions;
-		JTextArea bddInstructionsTextArea = new JTextArea(bddDefault, 10, 40);
-		bddInstructionsTextArea.setLineWrap(true);
-		bddInstructionsTextArea.setWrapStyleWord(true);
-		JScrollPane bddScrollPane = new JScrollPane(bddInstructionsTextArea);
+		String bddDefault = settings.bddText != null ? settings.bddText : defaultBDDText;
+		JTextArea bddTextArea = new JTextArea(bddDefault, 10, 40);
+		bddTextArea.setLineWrap(true);
+		bddTextArea.setWrapStyleWord(true);
+		JScrollPane bddScrollPane = new JScrollPane(bddTextArea);
 
 		JPanel bddPanel = new JPanel(new BorderLayout());
 		bddPanel.add(bddLabel, BorderLayout.NORTH);
@@ -126,21 +130,21 @@ public class MCPAgentPanel {
 		// Create a panel for buttons
 		JPanel buttonPanel = new JPanel();
 		JButton launchButton = new JButton("Launch");
-		JButton closeButton = new JButton("Save/Close");
+		JButton closeButton = new JButton("Close");
 
 		Runnable saveFromUi = () -> {
+			settings.llmProviderName = (String) providerCombo.getSelectedItem();
+			settings.customApiUrl = customUrlField.getText().trim();
 			settings.apiUrl = apiUrlField.getText().trim();
 			settings.apiKeyEnvVarName = apiKeyEnvVarField.getText().trim();
 			settings.openaiModel = openaiTextField.getText().trim();
 			settings.vision = visionCheckBox.isSelected();
 			settings.reasoningLevel = (String) reasoningCombo.getSelectedItem();
 			settings.maxActions = (Integer) actionsSpinner.getValue();
-			settings.bddScenarioName = bddScenarioNameField.getText().trim();
-			settings.bddInstructions = bddInstructionsTextArea.getText();
+			settings.bddText = bddTextArea.getText();
 
 			// keep in-memory default in sync as well
-			defaultBDDName = settings.bddScenarioName;
-			defaultBDDInstructions = settings.bddInstructions;
+			defaultBDDText = settings.bddText;
 
 			saveSettings(settings);
 		};
@@ -153,26 +157,15 @@ public class MCPAgentPanel {
 				setComponentsEnabled(dialog.getContentPane(), false);
 				dialog.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
 
-				String apiKeyEnvVar = apiKeyEnvVarField.getText().trim();
-				String apiUrl = apiUrlField.getText().trim();
-				String openaiModel = openaiTextField.getText().trim();
-				boolean vision = visionCheckBox.isSelected();
-				String reasoningLevel = (String) reasoningCombo.getSelectedItem();
-				int maxActions = (Integer) actionsSpinner.getValue();
-				String bddScenarioName = bddScenarioNameField.getText().trim();
-				String bddInstructions = bddInstructionsTextArea.getText();
+				// We load the factory instead of instancing OpenAi provider directly
+				com.ing.ide.main.testar.mcp.LlmProvider llmProvider = com.ing.ide.main.testar.mcp.LlmProviderFactory
+						.getProvider(settings);
 
 				LlmMcpAgent llmMcpAgent = new LlmMcpAgent(
 						sMainFrame.getProject(),
-						apiUrl,
-						apiKeyEnvVar,
-						openaiModel,
-						vision,
-						reasoningLevel,
-						maxActions,
-						bddScenarioName,
-						bddInstructions
-				);
+						llmProvider,
+						settings.maxActions != null ? settings.maxActions : 10,
+						settings.bddText);
 
 				SwingWorker<String, Void> worker = new SwingWorker<String, Void>() {
 					@Override
@@ -194,7 +187,6 @@ public class MCPAgentPanel {
 		closeButton.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				saveFromUi.run();
-				reloadReusableTree();
 				dialog.dispose();
 				sMainFrame.checkAndLoadRecent();
 			}
@@ -204,7 +196,6 @@ public class MCPAgentPanel {
 			@Override
 			public void windowClosing(java.awt.event.WindowEvent e) {
 				saveFromUi.run();
-				reloadReusableTree();
 				super.windowClosing(e);
 			}
 		});
@@ -227,8 +218,7 @@ public class MCPAgentPanel {
 		} catch (IOException e) {
 			java.util.logging.Logger.getLogger(MCPAgentPanel.class.getName()).log(
 					java.util.logging.Level.SEVERE,
-					e.getMessage()
-			);
+					e.getMessage());
 		}
 		return new McpAgentSettings();
 	}
@@ -243,8 +233,7 @@ public class MCPAgentPanel {
 		} catch (IOException e) {
 			java.util.logging.Logger.getLogger(MCPAgentPanel.class.getName()).log(
 					java.util.logging.Level.SEVERE,
-					e.getMessage()
-			);
+					e.getMessage());
 		}
 	}
 
@@ -254,26 +243,6 @@ public class MCPAgentPanel {
 			if (c instanceof Container) {
 				setComponentsEnabled((Container) c, enabled);
 			}
-		}
-	}
-
-	private void reloadReusableTree() {
-		try {
-			if (sMainFrame.getProject() == null || sMainFrame.getTestDesign() == null) {
-				return;
-			}
-			ReusableTreeModel model = sMainFrame.getTestDesign().getReusableTree().getTreeModel();
-			model.setProject(sMainFrame.getProject());
-			model.reload();
-		} catch (Exception ex) {
-			java.util.logging.Logger.getLogger(MCPAgentPanel.class.getName()).log(
-					java.util.logging.Level.SEVERE,
-					"Failed to reload the reusable tree from the project state"
-			);
-			java.util.logging.Logger.getLogger(MCPAgentPanel.class.getName()).log(
-					java.util.logging.Level.SEVERE,
-					ex.getMessage()
-			);
 		}
 	}
 
