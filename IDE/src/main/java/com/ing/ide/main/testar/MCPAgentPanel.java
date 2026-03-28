@@ -111,6 +111,35 @@ public class MCPAgentPanel {
 		formPanel.add(actionsLabel);
 		formPanel.add(actionsSpinner);
 
+		providerCombo.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				String selected = (String) providerCombo.getSelectedItem();
+				if ("Gemini".equals(selected)) {
+					customUrlField.setText("");
+					apiUrlField.setText("");
+					apiKeyEnvVarField.setText("GEMINI_API_KEY");
+					openaiTextField.setText("gemini-2.5-flash");
+					visionCheckBox.setSelected(true);
+					reasoningCombo.setSelectedItem("none");
+				} else if ("OpenAI".equals(selected)) {
+					customUrlField.setText("");
+					apiUrlField.setText("https://api.openai.com/v1/chat/completions");
+					apiKeyEnvVarField.setText("OPENAI_API_KEY");
+					openaiTextField.setText("gpt-4o");
+					visionCheckBox.setSelected(true);
+					reasoningCombo.setSelectedItem("none");
+				} else if ("Local/Ollama".equals(selected)) {
+					customUrlField.setText("http://localhost:11434/api/generate");
+					apiUrlField.setText("");
+					apiKeyEnvVarField.setText("");
+					openaiTextField.setText("llama3.1");
+					visionCheckBox.setSelected(false);
+					reasoningCombo.setSelectedItem("none");
+				}
+			}
+		});
+
 		inputPanel.add(formPanel, BorderLayout.NORTH);
 
 		// Add a BDD Instructions text area with scroll

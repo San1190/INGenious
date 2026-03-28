@@ -176,10 +176,14 @@ public class LlmMcpAgent {
         final String baseSystemPrompt = "You are a strict BDD-GUI test strategy agent for INGenious MCP.\n" +
                 "You must analyze the User Context (DOM state) to perform actions on the GUI step by step.\n" +
                 "Your objective is to complete the BDD instructions provided.\n\n" +
-                "CRITICAL INSTRUCTION - SPLIT + VERBOSE STRATEGY:\n" +
+                "CRITICAL INSTRUCTION 1 - MULTI-ACTION BDD STEPS:\n" +
+                "A single BDD step may require MULTIPLE GUI interactions (e.g. click a radio AND fill an input). " +
+                "Verify that ALL logical UI components for the current BDD step are fully executed in the DOM before advancing to the next BDD step. " +
+                "Do NOT skip ahead just because you executed one action for a step.\n\n" +
+                "CRITICAL INSTRUCTION 2 - SPLIT + VERBOSE STRATEGY:\n" +
                 "You MUST return your response ONLY as a valid JSON object raw (no markdown backticks). " +
                 "Your JSON MUST contain exactly two top-level keys: \"thought\" and \"action\".\n" +
-                "- \"thought\": A verbose explanation of your analysis of the current GUI state, why you chose the web element, and how it aligns with the current BDD step.\n"
+                "- \"thought\": A verbose explanation of your analysis of the current GUI state, why you chose the web element, and how it aligns with the current BDD step. Mention explicitly if the step requires more actions down the line.\n"
                 +
                 "- \"action\": A JSON object describing the tool to execute. It must contain \"toolName\" (string) and \"parameters\" (an object with key-value pairs matching the exact arguments for the chosen tool).\n\n"
                 +
@@ -198,6 +202,7 @@ public class LlmMcpAgent {
                 "Use ONLY the tools provided to you. If you complete all asserts or test execution must end, use the stopTestExecution tool. Begin!";
 
         int step = 0;
+        List<String> actionHistory = new ArrayList<>();
 
         // At the beginning, the context is the BDD list itself
         String currentUserContext = "Initial state. BDD Instructions to accomplish:\n" + this.bddInstructions
@@ -231,7 +236,24 @@ public class LlmMcpAgent {
                 }
 
                 String thought = (String) parsedResponse.get("thought");
-                Map<?, ?> action = (Map<?, ?>) parsedResponse.get("action");
+
+                // Llama 3.2 sometimes double-encodes "action" as a JSON string instead of an object
+                Map<?, ?> action;
+                Object rawAction = parsedResponse.get("action");
+                if (rawAction instanceof Map) {
+                    action = (Map<?, ?>) rawAction;
+                } else if (rawAction instanceof String) {
+                    addSevereLog("WARNING: 'action' field was a JSON string (double-encoded). Re-parsing...");
+                    try {
+                        action = mapper.readValue((String) rawAction, Map.class);
+                    } catch (JsonProcessingException e) {
+                        addSevereLog("Failed to re-parse action string: " + rawAction);
+                        currentUserContext = "ERROR: Your 'action' field must be a JSON object, NOT a string. Return it as a nested JSON object. Try again.";
+                        continue;
+                    }
+                } else {
+                    action = null;
+                }
 
                 if (action == null || !action.containsKey("toolName")) {
                     String feedback = "ISSUE: No 'action' block or 'toolName' provided. Please review.";
@@ -269,7 +291,9 @@ public class LlmMcpAgent {
                             + "\nAnalyze this consequence and plan your next action to follow the BDD.";
                 }
 
-                // Append general BDD instructions reminder to the context loop
+                actionHistory.add("Step " + step + " [THOUGHT: " + thought + "] -> ACTION: " + toolName + " " + argumentsJson);
+                // Append action history and general BDD instructions reminder to the context loop
+                currentUserContext += "\n\nPast Action History:\n" + String.join("\n", actionHistory);
                 currentUserContext += "\n\nPending BDD:\n" + this.bddInstructions;
 
                 step++;
