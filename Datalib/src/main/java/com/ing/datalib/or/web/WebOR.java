@@ -134,8 +134,9 @@ public class WebOR implements ORRootInf<WebORPage> {
             new File(page.getRepLocation()).mkdirs();
             setSaved(false);
             return page;
+        } else {
+            return getPageByName(pageName);
         }
-        return null;
     }
 
     @JsonIgnore

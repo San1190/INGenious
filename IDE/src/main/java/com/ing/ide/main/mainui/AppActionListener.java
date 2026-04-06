@@ -9,6 +9,7 @@ import com.ing.ide.main.mainui.components.testdesign.testdata.ImportTestData;
 import com.ing.ide.main.settings.INGeniousSettings;
 import com.ing.ide.main.settings.DriverSettings;
 import com.ing.ide.main.settings.TMSettings;
+import com.ing.ide.main.testar.MCPAgentPanel;
 import com.ing.ide.main.googlerecordingjson.JsonParser;
 import com.ing.ide.main.playwrightrecording.PlaywrightRecordingParser;
 import com.ing.ide.main.playwrightrecording.RecordedStepsNameDialogue;
@@ -59,6 +60,8 @@ public class AppActionListener implements ActionListener {
     private final AppToolBar appToolBar;
     
     private Timer autoSaveTimer;
+
+    private final MCPAgentPanel mcpAgentPanel;
     
     //private static AppActionListener instance;
     
@@ -75,6 +78,7 @@ public class AppActionListener implements ActionListener {
         jsonParser = new JsonParser(sMainFrame);
         injectScript = new InjectScript();
         importTestData = new ImportTestData(sMainFrame);
+        mcpAgentPanel = new MCPAgentPanel(sMainFrame);
     }
 
     @Override
@@ -254,6 +258,11 @@ public class AppActionListener implements ActionListener {
                     }
                 } 
                  break; 
+
+            case "MCP Agent":
+                mcpAgentPanel.openEditor();
+                break;
+
             default:
                 System.out.println(ae.getActionCommand());
                 sMainFrame.getLoader().showIDontCare();

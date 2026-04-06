@@ -257,7 +257,11 @@ public class AppMenuBar extends JMenuBar {
                 withMnemonics(
                         withShortCut(
                                 Utils.createMenuItem("Har Compare", sActionListener)), 'H'));
-        
+
+        JMenuItem testarMenu = new JMenu("TESTAR Scriptless");
+        testarMenu.add(Utils.createMenuItem("MCP Agent", sActionListener));
+        tools.add(testarMenu);
+
         return tools;
     }
 
