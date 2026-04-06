@@ -97,7 +97,7 @@ public class MCPAgentPanel {
 		formPanel.add(visionCheckBox);
 
 		JLabel reasoningLabel = new JLabel("Reasoning effort:");
-		String[] reasoningOptions = { "none", "low", "medium", "high" };
+		String[] reasoningOptions = { "none", "minimal", "low", "medium", "high" };
 		JComboBox<String> reasoningCombo = new JComboBox<>(reasoningOptions);
 		String reasoningDefault = settings.reasoningLevel != null ? settings.reasoningLevel : "none";
 		reasoningCombo.setSelectedItem(reasoningDefault);
@@ -216,6 +216,7 @@ public class MCPAgentPanel {
 		closeButton.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				saveFromUi.run();
+				reloadReusableTree();
 				dialog.dispose();
 				sMainFrame.checkAndLoadRecent();
 			}
@@ -225,6 +226,7 @@ public class MCPAgentPanel {
 			@Override
 			public void windowClosing(java.awt.event.WindowEvent e) {
 				saveFromUi.run();
+				reloadReusableTree();
 				super.windowClosing(e);
 			}
 		});
@@ -272,6 +274,27 @@ public class MCPAgentPanel {
 			if (c instanceof Container) {
 				setComponentsEnabled((Container) c, enabled);
 			}
+		}
+	}
+
+	private void reloadReusableTree() {
+		try {
+			if (sMainFrame.getProject() == null || sMainFrame.getTestDesign() == null) {
+				return;
+			}
+			com.ing.ide.main.mainui.components.testdesign.tree.model.ReusableTreeModel model =
+					sMainFrame.getTestDesign().getReusableTree().getTreeModel();
+			model.setProject(sMainFrame.getProject());
+			model.reload();
+		} catch (Exception ex) {
+			java.util.logging.Logger.getLogger(MCPAgentPanel.class.getName()).log(
+					java.util.logging.Level.SEVERE,
+					"Failed to reload the reusable tree from the project state"
+			);
+			java.util.logging.Logger.getLogger(MCPAgentPanel.class.getName()).log(
+					java.util.logging.Level.SEVERE,
+					ex.getMessage()
+			);
 		}
 	}
 
