@@ -50,7 +50,7 @@ public class MCPAgentPanel {
 		JPanel formPanel = new JPanel(new GridLayout(8, 2, 5, 5));
 
 		JLabel providerLabel = new JLabel("LLM Provider:");
-		String[] providers = { "OpenAI", "Gemini", "Local/Ollama" };
+		String[] providers = { "OpenAI", "Gemini", "Local/Ollama", "Qwen/Ollama" };
 		JComboBox<String> providerCombo = new JComboBox<>(providers);
 		String providerDefault = settings.llmProviderName != null ? settings.llmProviderName : "OpenAI";
 		providerCombo.setSelectedItem(providerDefault);
@@ -134,6 +134,13 @@ public class MCPAgentPanel {
 					apiUrlField.setText("");
 					apiKeyEnvVarField.setText("");
 					openaiTextField.setText("llama3.1");
+					visionCheckBox.setSelected(false);
+					reasoningCombo.setSelectedItem("none");
+				} else if ("Qwen/Ollama".equals(selected)) {
+					customUrlField.setText("http://localhost:11434/api/chat");
+					apiUrlField.setText("");
+					apiKeyEnvVarField.setText("");
+					openaiTextField.setText("qwen2.5:7b");
 					visionCheckBox.setSelected(false);
 					reasoningCombo.setSelectedItem("none");
 				}

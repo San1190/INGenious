@@ -17,6 +17,11 @@ public class LlmProviderFactory {
                         settings.customApiUrl != null && !settings.customApiUrl.isEmpty() ? settings.customApiUrl
                                 : "http://localhost:11434/api/generate",
                         settings.openaiModel);
+            case "Qwen/Ollama":
+                return new QwenOllamaProvider(
+                        settings.customApiUrl != null && !settings.customApiUrl.isEmpty() ? settings.customApiUrl
+                                : "http://localhost:11434/api/chat",
+                        settings.openaiModel);
             case "OpenAI":
             default:
                 if (apiKey == null || apiKey.isEmpty()) {
