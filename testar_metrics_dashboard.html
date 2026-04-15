@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>TESTAR-INGenious · Métricas de Ejecución</title>
+  <!--
+    mcp_metrics.js es generado automáticamente por LlmMcpAgent.writeMetricsJs()
+    al terminar cada run. Si no existe (primera apertura), se usan datos de muestra.
+    Sin dependencias externas — funciona 100% offline.
+  -->
+  <script src="mcp_metrics.js" onerror="console.info('[INGenious] mcp_metrics.js no encontrado, usando datos de muestra.')"></script>
+  <style>
+    :root {
+      --bg:       #0f1117;
+      --surface:  #1a1d27;
+      --surface2: #22263a;
+      --accent:   #4f8ef7;
+      --accent2:  #a78bfa;
+      --green:    #34d399;
+      --red:      #f87171;
+      --yellow:   #fbbf24;
+      --text:     #e2e8f0;
+      --muted:    #64748b;
+      --border:   #2d3148;
+      --radius:   12px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      padding: 2rem;
+      min-height: 100vh;
+    }
+
+    /* ── HEADER ────────────────────────────────────────── */
+    .header {
+      display: flex; align-items: center; gap: 1rem;
+      margin-bottom: 2rem; padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+    .header-badge {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 8px; padding: .45rem .9rem;
+      font-size: .75rem; font-weight: 700;
+      letter-spacing: .08em; text-transform: uppercase; white-space: nowrap;
+    }
+    .header h1 { font-size: 1.5rem; font-weight: 700; }
+    .header h1 span { color: var(--accent); }
+    .run-meta { margin-left: auto; text-align: right; font-size: .8rem; color: var(--muted); line-height: 1.7; }
+    .run-meta strong { color: var(--text); }
+    .live-dot {
+      display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+      background: var(--green); margin-right: 4px;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+    .sample-banner {
+      background: rgba(251,191,36,.1); border: 1px solid rgba(251,191,36,.3);
+      color: var(--yellow); border-radius: 8px; padding: .6rem 1rem;
+      margin-bottom: 1.5rem; font-size: .82rem;
+    }
+
+    /* ── KPI CARDS ─────────────────────────────────────── */
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(190px,1fr)); gap: 1rem; margin-bottom: 2rem; }
+    .kpi-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1.25rem 1.5rem;
+      position: relative; overflow: hidden;
+    }
+    .kpi-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0;
+      height: 3px; border-radius: var(--radius) var(--radius) 0 0;
+    }
+    .kpi-card.blue::before   { background: var(--accent); }
+    .kpi-card.purple::before { background: var(--accent2); }
+    .kpi-card.green::before  { background: var(--green); }
+    .kpi-card.red::before    { background: var(--red); }
+    .kpi-card.yellow::before { background: var(--yellow); }
+    .kpi-label { font-size: .72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: .5rem; }
+    .kpi-value { font-size: 2rem; font-weight: 800; line-height: 1; }
+    .kpi-sub   { font-size: .72rem; color: var(--muted); margin-top: .35rem; }
+    .kpi-card.blue   .kpi-value { color: var(--accent); }
+    .kpi-card.purple .kpi-value { color: var(--accent2); }
+    .kpi-card.green  .kpi-value { color: var(--green); }
+    .kpi-card.red    .kpi-value { color: var(--red); }
+    .kpi-card.yellow .kpi-value { color: var(--yellow); }
+
+    /* ── CHARTS ────────────────────────────────────────── */
+    .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 1.25rem; }
+    .charts-grid.wide { grid-template-columns: 1fr; }
+    @media (max-width: 900px) { .charts-grid { grid-template-columns: 1fr; } }
+    .chart-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1.5rem;
+    }
+    .chart-title {
+      font-size: .8rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: .06em; color: var(--muted);
+      margin-bottom: 1rem; display: flex; align-items: center; gap: .5rem;
+    }
+    .chart-title .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    canvas { width: 100% !important; display: block; }
+
+    /* ── TABLE ─────────────────────────────────────────── */
+    .table-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1.5rem;
+      margin-bottom: 1.25rem; overflow-x: auto;
+    }
+    .table-card table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+    .table-card th {
+      background: var(--surface2); color: var(--muted);
+      text-transform: uppercase; letter-spacing: .05em; font-size: .7rem;
+      padding: .7rem 1rem; text-align: left; border-bottom: 1px solid var(--border);
+    }
+    .table-card td { padding: .72rem 1rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .table-card tr:last-child td { border-bottom: none; }
+    .table-card tr:hover td { background: var(--surface2); }
+    .section-title {
+      font-size: .8rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: .06em; color: var(--muted); margin-bottom: 1rem;
+      display: flex; align-items: center; gap: .5rem;
+    }
+    .badge { display: inline-block; padding: .18rem .55rem; border-radius: 999px; font-size: .68rem; font-weight: 700; }
+    .badge-saas   { background: rgba(79,142,247,.15);  color: var(--accent);  border: 1px solid rgba(79,142,247,.3); }
+    .badge-local  { background: rgba(52,211,153,.15);  color: var(--green);   border: 1px solid rgba(52,211,153,.3); }
+    .badge-hybrid { background: rgba(251,191,36,.15);  color: var(--yellow);  border: 1px solid rgba(251,191,36,.3); }
+    .pill { display: inline-block; min-width: 50px; text-align: center; padding: .18rem .4rem; border-radius: 6px; font-weight: 700; font-size: .8rem; }
+    .pill-high { background: rgba(52,211,153,.2);   color: var(--green); }
+    .pill-mid  { background: rgba(251,191,36,.2);   color: var(--yellow); }
+    .pill-low  { background: rgba(248,113,113,.2);  color: var(--red); }
+    .pill-zero { background: rgba(100,116,139,.15); color: var(--muted); }
+
+    /* ── EXPORT BAR ────────────────────────────────────── */
+    .export-bar {
+      display: flex; align-items: center; gap: .75rem;
+      margin-bottom: 1.25rem; padding: 1rem 1.25rem;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); flex-wrap: wrap;
+    }
+    .export-bar span { font-size: .78rem; color: var(--muted); margin-right: auto; }
+    .btn-export {
+      display: inline-flex; align-items: center; gap: .45rem;
+      padding: .5rem 1.1rem; border-radius: 8px;
+      font-size: .8rem; font-weight: 600; cursor: pointer;
+      border: none; transition: opacity .15s, transform .1s;
+    }
+    .btn-export:hover  { opacity: .85; }
+    .btn-export:active { transform: scale(.97); }
+    .btn-json { background: var(--accent);  color: #fff; }
+    .btn-csv  { background: var(--green);   color: #0f1117; }
+    .btn-html { background: var(--accent2); color: #fff; }
+
+    /* ── FOOTER ────────────────────────────────────────── */
+    .footer { text-align: center; color: var(--muted); font-size: .75rem; margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border); }
+    .footer strong { color: var(--text); }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-badge">TESTAR · INGenious</div>
+  <div>
+    <h1>Dashboard de <span>Métricas</span> Experimentales</h1>
+    <div style="font-size:.8rem;color:var(--muted);margin-top:.2rem">
+      SUT: Parabank · Estrategia: Split + Verbose · TFG 2025-2026
+    </div>
+  </div>
+  <div class="run-meta">
+    <div><span class="live-dot"></span>Run: <strong id="meta-runid">—</strong></div>
+    <div>Timestamp: <strong id="meta-ts">—</strong></div>
+    <div>Objetivo: <strong id="meta-goal" title="">—</strong></div>
+    <div>Runs totales: <strong id="meta-total">—</strong></div>
+  </div>
+</div>
+
+<div class="sample-banner" id="sample-banner" style="display:none">
+  ⚠️ <strong>Datos de muestra.</strong> Ejecuta un run con INGenious para ver métricas reales.
+  El fichero <code>mcp_metrics.js</code> se genera automáticamente al finalizar cada ejecución.
+</div>
+
+<!-- KPI CARDS -->
+<div class="kpi-grid">
+  <div class="kpi-card green">
+    <div class="kpi-label">Mejor Success Rate</div>
+    <div class="kpi-value" id="kpi-best-sr">—</div>
+    <div class="kpi-sub" id="kpi-best-model">—</div>
+  </div>
+  <div class="kpi-card red">
+    <div class="kpi-label">Alucinaciones (media)</div>
+    <div class="kpi-value" id="kpi-avg-hall">—</div>
+    <div class="kpi-sub">acciones inválidas / run</div>
+  </div>
+  <div class="kpi-card blue">
+    <div class="kpi-label">Latencia media IA</div>
+    <div class="kpi-value" id="kpi-avg-lat">—</div>
+    <div class="kpi-sub">ms por acción (último run)</div>
+  </div>
+  <div class="kpi-card purple">
+    <div class="kpi-label">Último modelo</div>
+    <div class="kpi-value" style="font-size:1.1rem;padding-top:.35rem" id="kpi-last-model">—</div>
+    <div class="kpi-sub" id="kpi-last-success">—</div>
+  </div>
+  <div class="kpi-card yellow">
+    <div class="kpi-label">Runs ejecutados</div>
+    <div class="kpi-value" id="kpi-runs">—</div>
+    <div class="kpi-sub">experimentos acumulados</div>
+  </div>
+</div>
+
+<!-- CHARTS FILA 1 -->
+<div class="charts-grid">
+  <div class="chart-card">
+    <div class="chart-title"><span class="dot" style="background:var(--green)"></span>Success Rate por Modelo (%)</div>
+    <canvas id="chartSuccessRate" height="260"></canvas>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title"><span class="dot" style="background:var(--red)"></span>Alucinaciones (acciones inválidas) — RQ4</div>
+    <canvas id="chartHallucinations" height="260"></canvas>
+  </div>
+</div>
+
+<!-- CHARTS FILA 2 -->
+<div class="charts-grid">
+  <div class="chart-card">
+    <div class="chart-title"><span class="dot" style="background:var(--accent)"></span>Latencia media por Acción (ms) — RQ2</div>
+    <canvas id="chartLatency" height="260"></canvas>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title"><span class="dot" style="background:var(--accent2)"></span>Pasos Medios hasta el Objetivo — RQ1</div>
+    <canvas id="chartSteps" height="260"></canvas>
+  </div>
+</div>
+
+<!-- CHARTS FILA 3: Latencia temporal -->
+<div class="charts-grid wide">
+  <div class="chart-card">
+    <div class="chart-title"><span class="dot" style="background:var(--yellow)"></span>Latencia por Paso de Ejecución (ms) · Último Run — RQ2</div>
+    <canvas id="chartLatencyTimeline" height="180"></canvas>
+  </div>
+</div>
+
+<!-- EXPORT BAR -->
+<div class="export-bar">
+  <span>📤 Exportar resultados del experimento</span>
+  <button class="btn-export btn-json" onclick="exportJSON()">⬇ JSON</button>
+  <button class="btn-export btn-csv"  onclick="exportCSV()">⬇ CSV</button>
+  <button class="btn-export btn-html" onclick="exportHTMLSnapshot()">📄 HTML snapshot</button>
+</div>
+
+<!-- TABLA COMPARATIVA -->
+<div class="table-card">
+  <div class="section-title">
+    <span style="width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block"></span>
+    Comparativa Agregada por Modelo
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Modelo</th><th>Tipo</th><th>Runs</th><th>Success Rate</th>
+        <th>Avg Steps</th><th>Avg Latencia (ms)</th><th>Avg Alucinaciones</th><th>Viabilidad</th>
+      </tr>
+    </thead>
+    <tbody id="models-table-body"></tbody>
+  </table>
+</div>
+
+<!-- HISTORIAL DE RUNS -->
+<div class="table-card">
+  <div class="section-title">
+    <span style="width:8px;height:8px;border-radius:50%;background:var(--yellow);display:inline-block"></span>
+    Historial de Runs Individuales
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th><th>Timestamp</th><th>Modelo</th><th>Objetivo BDD</th>
+        <th>Éxito</th><th>Pasos</th><th>Avg Latencia</th><th>Alucinaciones</th>
+      </tr>
+    </thead>
+    <tbody id="runs-table-body"></tbody>
+  </table>
+</div>
+
+<!-- FOOTER -->
+<div class="footer">
+  <strong>TESTAR-INGenious · TFG 2025-2026</strong> ·
+  Santiago Fuentes · Tutores: Beatriz Marín, Tanja Vos, Fernando Pastor Ricós ·
+  Estrategia: Split + Verbose · SUT: Parabank
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     DATOS DE MUESTRA
+═══════════════════════════════════════════════════════════ -->
+<script>
+window.SAMPLE_METRICS_DATA = {
+  meta: {
+    lastRunId:   "sin-datos",
+    timestamp:   new Date().toLocaleString("es-ES"),
+    lastRunGoal: "Ejecuta un run con INGenious para ver datos reales",
+    totalRuns:   0
+  },
+  models: [
+    { name: "GPT-4o-mini",    type: "SaaS",   runs: 50, successRate: 100, avgSteps: 8,  avgLatencyMs: 1850, avgHallucinations: 0.2 },
+    { name: "Qwen 2.5:7b",    type: "Local",  runs: 50, successRate: 62,  avgSteps: 14, avgLatencyMs: 3200, avgHallucinations: 2.1 },
+    { name: "Gemma 2:9b",     type: "Local",  runs: 50, successRate: 66,  avgSteps: 13, avgLatencyMs: 4100, avgHallucinations: 1.8 },
+    { name: "Llama 3.1:8b",   type: "Local",  runs: 50, successRate: 44,  avgSteps: 18, avgLatencyMs: 4800, avgHallucinations: 5.6 },
+    { name: "Mistral 0.3:7b", type: "Hybrid", runs: 50, successRate: 12,  avgSteps: 22, avgLatencyMs: 3600, avgHallucinations: 9.1 },
+    { name: "Llama 3.2:3b",   type: "Local",  runs: 50, successRate: 6,   avgSteps: 25, avgLatencyMs: 2900, avgHallucinations: 12.4 }
+  ],
+  latencyTimeline: [1420, 1890, 1650, 2100, 1780, 1920, 1550, 2300, 1700, 1830],
+  runs: []
+};
+</script>
+
+<!-- ═══════════════════════════════════════════════════════
+     MINI-CHARTS ENGINE (vanilla Canvas — sin dependencias)
+═══════════════════════════════════════════════════════════ -->
+<script>
+/* ── Utilidades Canvas ──────────────────────────────────── */
+const CSS = getComputedStyle(document.documentElement);
+const c = (v) => CSS.getPropertyValue(v).trim();
+
+function hexToRgb(hex) {
+  hex = hex.replace('#','');
+  if (hex.length === 3) hex = hex.split('').map(x=>x+x).join('');
+  const n = parseInt(hex,16);
+  return [(n>>16)&255, (n>>8)&255, n&255];
+}
+
+// Colores base (igual que el CSS)
+const COLORS = {
+  green:  '#34d399',
+  red:    '#f87171',
+  blue:   '#4f8ef7',
+  purple: '#a78bfa',
+  yellow: '#fbbf24',
+  muted:  '#64748b',
+  border: '#2d3148',
+  text:   '#e2e8f0',
+  bg:     '#1a1d27'
+};
+
+function rgba(hex, alpha) {
+  const [r,g,b] = hexToRgb(hex);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+/* ── Gráfico de barras ──────────────────────────────────── */
+function drawBarChart(canvasId, labels, values, barColor, options = {}) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.offsetWidth || canvas.parentElement.clientWidth || 400;
+  const H = canvas.height || 260;
+  canvas.width  = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width  = W + 'px';
+  canvas.style.height = H + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const PAD  = { top: 20, right: 16, bottom: 52, left: 52 };
+  const cW   = W - PAD.left - PAD.right;
+  const cH   = H - PAD.top  - PAD.bottom;
+  const max  = options.max != null ? options.max : Math.max(...values, 1) * 1.15;
+  const min  = options.min != null ? options.min : 0;
+  const range = max - min;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Grid lines
+  const gridCount = 5;
+  ctx.strokeStyle = COLORS.border;
+  ctx.lineWidth   = 1;
+  ctx.setLineDash([4, 4]);
+  for (let i = 0; i <= gridCount; i++) {
+    const y = PAD.top + cH - (i / gridCount) * cH;
+    ctx.beginPath();
+    ctx.moveTo(PAD.left, y);
+    ctx.lineTo(PAD.left + cW, y);
+    ctx.stroke();
+
+    const val = min + (range * i / gridCount);
+    ctx.fillStyle = COLORS.muted;
+    ctx.font = '10px Segoe UI, system-ui, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(
+      options.suffix ? Math.round(val).toLocaleString('es') + options.suffix : Math.round(val).toLocaleString('es'),
+      PAD.left - 6, y + 3
+    );
+  }
+  ctx.setLineDash([]);
+
+  // Bars
+  const gap    = cW * 0.12 / (labels.length + 1);
+  const barW   = (cW - gap * (labels.length + 1)) / labels.length;
+
+  labels.forEach((label, i) => {
+    const val    = values[i] || 0;
+    const norm   = Math.max(0, Math.min(1, (val - min) / range));
+    const bH     = norm * cH;
+    const x      = PAD.left + gap + i * (barW + gap);
+    const y      = PAD.top + cH - bH;
+
+    // Bar fill
+    const col = typeof barColor === 'function' ? barColor(val, i) : barColor;
+    ctx.fillStyle = rgba(col, 0.8);
+    const r = Math.min(6, barW / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + barW - r, y);
+    ctx.quadraticCurveTo(x + barW, y, x + barW, y + r);
+    ctx.lineTo(x + barW, y + bH);
+    ctx.lineTo(x, y + bH);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+    ctx.fill();
+
+    // Value on top
+    ctx.fillStyle = COLORS.text;
+    ctx.font = 'bold 11px Segoe UI, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    const displayVal = options.suffix ? val + options.suffix : val.toLocaleString('es');
+    ctx.fillText(displayVal, x + barW / 2, Math.max(y - 4, PAD.top + 10));
+
+    // Label below
+    ctx.fillStyle = COLORS.muted;
+    ctx.font = '10px Segoe UI, system-ui, sans-serif';
+    const shortLabel = label.length > 10 ? label.substring(0, 9) + '…' : label;
+    ctx.fillText(shortLabel, x + barW / 2, PAD.top + cH + 16);
+
+    // Second line label
+    if (label.includes(':') || label.includes(' ')) {
+      const parts = label.split(/[\s:]/);
+      if (parts.length > 1) {
+        ctx.fillText(parts.slice(1).join(' '), x + barW / 2, PAD.top + cH + 28);
+      }
+    }
+  });
+}
+
+/* ── Gráfico de línea ───────────────────────────────────── */
+function drawLineChart(canvasId, values, lineColor) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.offsetWidth || canvas.parentElement.clientWidth || 800;
+  const H = canvas.height || 180;
+  canvas.width  = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width  = W + 'px';
+  canvas.style.height = H + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const PAD = { top: 20, right: 20, bottom: 36, left: 56 };
+  const cW  = W - PAD.left - PAD.right;
+  const cH  = H - PAD.top  - PAD.bottom;
+  const max = Math.max(...values, 1) * 1.15;
+  const min = 0;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Grid
+  ctx.strokeStyle = COLORS.border;
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  for (let i = 0; i <= 4; i++) {
+    const y = PAD.top + cH - (i / 4) * cH;
+    ctx.beginPath();
+    ctx.moveTo(PAD.left, y);
+    ctx.lineTo(PAD.left + cW, y);
+    ctx.stroke();
+    ctx.fillStyle = COLORS.muted;
+    ctx.font = '10px Segoe UI, system-ui, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(Math.round(min + (max - min) * i / 4).toLocaleString('es'), PAD.left - 6, y + 3);
+  }
+  ctx.setLineDash([]);
+
+  if (values.length < 2) return;
+
+  const xStep = cW / (values.length - 1);
+  const pts   = values.map((v, i) => ({
+    x: PAD.left + i * xStep,
+    y: PAD.top + cH - ((v - min) / (max - min)) * cH
+  }));
+
+  // Area fill
+  const grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + cH);
+  grad.addColorStop(0, rgba(lineColor, 0.25));
+  grad.addColorStop(1, rgba(lineColor, 0.01));
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, PAD.top + cH);
+  pts.forEach(p => ctx.lineTo(p.x, p.y));
+  ctx.lineTo(pts[pts.length - 1].x, PAD.top + cH);
+  ctx.closePath();
+  ctx.fill();
+
+  // Line
+  ctx.strokeStyle = lineColor;
+  ctx.lineWidth = 2.5;
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+  ctx.stroke();
+
+  // Points
+  pts.forEach((p, i) => {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+    ctx.fillStyle = lineColor;
+    ctx.fill();
+    ctx.strokeStyle = COLORS.bg;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    // X labels
+    ctx.fillStyle = COLORS.muted;
+    ctx.font = '10px Segoe UI, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('P' + (i + 1), p.x, PAD.top + cH + 16);
+  });
+}
+
+/* ── Helpers tabla ──────────────────────────────────────── */
+const viab     = sr => sr >= 80 ? '✅ Alta' : sr >= 50 ? '⚠️ Media' : '❌ Baja';
+const srPill   = sr => { const c = sr >= 80 ? 'pill-high' : sr >= 50 ? 'pill-mid' : 'pill-low'; return `<span class="pill ${c}">${sr}%</span>`; };
+const hallPill = h  => { const c = h  <= 1  ? 'pill-zero' : h  <= 3  ? 'pill-mid' : 'pill-low'; return `<span class="pill ${c}">${h}</span>`; };
+const typeBadge = t => { const c = t === 'SaaS' ? 'badge-saas' : t === 'Local' ? 'badge-local' : 'badge-hybrid'; return `<span class="badge ${c}">${t}</span>`; };
+
+/* ── Colores de barra por valor ─────────────────────────── */
+const srColor   = v => v >= 80 ? COLORS.green  : v >= 50 ? COLORS.yellow : COLORS.red;
+const hallColor = v => v <= 1  ? COLORS.green  : v <= 3  ? COLORS.yellow : COLORS.red;
+
+/* ── Render principal ───────────────────────────────────── */
+(function render() {
+  const usingSample = (typeof mcpMetricsData === 'undefined');
+  const D = usingSample ? window.SAMPLE_METRICS_DATA : mcpMetricsData;
+
+  if (usingSample) document.getElementById('sample-banner').style.display = 'block';
+
+  const models = D.models || [];
+  const labels = models.map(m => m.name);
+
+  // KPI cards
+  const sorted     = [...models].sort((a, b) => b.successRate - a.successRate);
+  const bestModel  = sorted[0] || {};
+  const avgHall    = models.length ? (models.reduce((s, m) => s + (m.avgHallucinations || 0), 0) / models.length).toFixed(1) : '—';
+  const timeline   = D.latencyTimeline || [];
+  const avgLat     = timeline.length ? Math.round(timeline.reduce((s, v) => s + v, 0) / timeline.length) : null;
+  const lastRun    = (D.runs || []).slice(-1)[0];
+
+  document.getElementById('kpi-best-sr').textContent    = bestModel.successRate != null ? bestModel.successRate + '%' : '—';
+  document.getElementById('kpi-best-model').textContent = bestModel.name || '—';
+  document.getElementById('kpi-avg-hall').textContent   = avgHall;
+  document.getElementById('kpi-avg-lat').textContent    = avgLat != null ? avgLat.toLocaleString('es') : '—';
+  document.getElementById('kpi-runs').textContent       = D.meta.totalRuns || D.runs.length || 0;
+  document.getElementById('kpi-last-model').textContent  = lastRun ? lastRun.model : (bestModel.name || '—');
+  document.getElementById('kpi-last-success').textContent = lastRun ? (lastRun.success ? '✅ Completado con éxito' : '❌ No completado') : 'Sin datos de run';
+  document.getElementById('meta-runid').textContent = D.meta.lastRunId  || '—';
+  document.getElementById('meta-ts').textContent    = D.meta.timestamp  || '—';
+  const goal = D.meta.lastRunGoal || '—';
+  const metaGoalEl = document.getElementById('meta-goal');
+  metaGoalEl.textContent = goal.length > 50 ? goal.substring(0, 50) + '…' : goal;
+  metaGoalEl.title = goal;
+  document.getElementById('meta-total').textContent = D.meta.totalRuns || '—';
+
+  // Tablas
+  const tbody = document.getElementById('models-table-body');
+  sorted.forEach(m => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="font-weight:600">${m.name}</td>
+      <td>${typeBadge(m.type)}</td>
+      <td style="color:var(--muted)">${m.runs}</td>
+      <td>${srPill(m.successRate)}</td>
+      <td>${m.avgSteps}</td>
+      <td>${(m.avgLatencyMs || 0).toLocaleString('es')} ms</td>
+      <td>${hallPill(m.avgHallucinations)}</td>
+      <td style="font-weight:600">${viab(m.successRate)}</td>`;
+    tbody.appendChild(tr);
+  });
+
+  const runsTbody = document.getElementById('runs-table-body');
+  const runsData  = (D.runs || []).slice().reverse();
+  if (runsData.length === 0) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td colspan="8" style="text-align:center;color:var(--muted);padding:2rem">
+      Sin runs registrados. Aparecerán aquí automáticamente tras cada ejecución.</td>`;
+    runsTbody.appendChild(tr);
+  } else {
+    runsData.forEach(r => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="color:var(--muted);font-size:.75rem">${r.runId || '—'}</td>
+        <td style="color:var(--muted);font-size:.75rem;white-space:nowrap">${r.timestamp || '—'}</td>
+        <td style="font-weight:600">${r.model || '—'}</td>
+        <td style="color:var(--muted);font-size:.75rem;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.testGoal || ''}">${r.testGoal || '—'}</td>
+        <td>${r.success ? '✅' : '❌'}</td>
+        <td>${r.totalSteps || 0}</td>
+        <td>${(r.avgLatencyMs || 0).toLocaleString('es')} ms</td>
+        <td>${hallPill(r.invalidActions || 0)}</td>`;
+      runsTbody.appendChild(tr);
+    });
+  }
+
+  // Charts — los renderizamos después de que el DOM esté pintado
+  requestAnimationFrame(() => {
+    drawBarChart('chartSuccessRate',  labels, models.map(m => m.successRate),      srColor,         { max: 100, suffix: '%' });
+    drawBarChart('chartHallucinations', labels, models.map(m => m.avgHallucinations), hallColor,    {});
+    drawBarChart('chartLatency',      labels, models.map(m => m.avgLatencyMs),     COLORS.blue,     { suffix: '' });
+    drawBarChart('chartSteps',        labels, models.map(m => m.avgSteps),         COLORS.purple,   {});
+    drawLineChart('chartLatencyTimeline', timeline, COLORS.yellow);
+  });
+})();
+
+// Redibuja charts al cambiar el tamaño de la ventana
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    const D = (typeof mcpMetricsData !== 'undefined') ? mcpMetricsData : window.SAMPLE_METRICS_DATA;
+    const models = D.models || [];
+    const labels = models.map(m => m.name);
+    drawBarChart('chartSuccessRate',     labels, models.map(m => m.successRate),      srColor,       { max: 100, suffix: '%' });
+    drawBarChart('chartHallucinations',  labels, models.map(m => m.avgHallucinations), hallColor,    {});
+    drawBarChart('chartLatency',         labels, models.map(m => m.avgLatencyMs),     COLORS.blue,   {});
+    drawBarChart('chartSteps',           labels, models.map(m => m.avgSteps),         COLORS.purple, {});
+    drawLineChart('chartLatencyTimeline', D.latencyTimeline || [], COLORS.yellow);
+  }, 200);
+});
+</script>
+
+<!-- ═══════════════════════════════════════════════════════
+     FUNCIONES DE EXPORTACIÓN
+═══════════════════════════════════════════════════════════ -->
+<script>
+function getActiveData() {
+  return (typeof mcpMetricsData !== 'undefined') ? mcpMetricsData : window.SAMPLE_METRICS_DATA;
+}
+function downloadFile(filename, content, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+function fileTimestamp() {
+  return new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+}
+function exportJSON() {
+  const D   = getActiveData();
+  const out = { exportedAt: new Date().toLocaleString('es-ES'), isSampleData: (typeof mcpMetricsData === 'undefined'), ...D };
+  downloadFile(`testar_metrics_${fileTimestamp()}.json`, JSON.stringify(out, null, 2), 'application/json');
+}
+function exportCSV() {
+  const D = getActiveData();
+  const viab = sr => sr >= 80 ? 'Alta' : sr >= 50 ? 'Media' : 'Baja';
+  const modelRows = [...D.models].sort((a,b)=>b.successRate-a.successRate)
+    .map(m => [`"${m.name}"`,`"${m.type}"`,m.runs,m.successRate,m.avgSteps,m.avgLatencyMs||0,m.avgHallucinations||0,`"${viab(m.successRate)}"`].join(','));
+  const runRows = (D.runs||[]).map((r,i) => [i+1,`"${r.timestamp||''}"`,`"${r.model||''}"`,`"${(r.testGoal||'').replace(/"/g,'""')}"`,r.success?'SI':'NO',r.totalSteps||0,r.avgLatencyMs||0,r.invalidActions||0].join(','));
+  const timelineRows = (D.latencyTimeline||[]).map((v,i)=>`${i+1},${v}`);
+  const csv = [
+    `# TESTAR-INGenious · Exportación · ${new Date().toLocaleString('es-ES')}`,
+    `# Datos: ${typeof mcpMetricsData!=='undefined'?'REALES':'MUESTRA'}`,
+    '','## COMPARATIVA POR MODELO',
+    'Modelo,Tipo,Runs,SuccessRate(%),AvgSteps,AvgLatencia(ms),AvgAlucinaciones,Viabilidad',
+    ...modelRows,'',
+    '## HISTORIAL DE RUNS',
+    '#,Timestamp,Modelo,ObjetivoBDD,Exito,Pasos,AvgLatencia(ms),Alucinaciones',
+    ...runRows,'',
+    '## LATENCIA TIMELINE','Paso,Latencia(ms)',...timelineRows
+  ].join('\n');
+  downloadFile(`testar_metrics_${fileTimestamp()}.csv`, csv, 'text/csv;charset=utf-8;');
+}
+function exportHTMLSnapshot() {
+  const D = getActiveData();
+  let html = document.documentElement.outerHTML;
+  const inlineScript = `<script>var mcpMetricsData = ${JSON.stringify(D)};<\/script>`;
+  html = html.replace(/<script src="mcp_metrics\.js"[^>]*><\/script>/, inlineScript);
+  downloadFile(`testar_dashboard_snapshot_${fileTimestamp()}.html`, html, 'text/html;charset=utf-8;');
+}
+</script>
+</body>
+</html>
