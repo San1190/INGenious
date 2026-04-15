@@ -70,6 +70,14 @@ public class LlmMcpAgent {
     private final String bddInstructions;
     private final McpInterface mcpInterface;
 
+    // ── Métricas de ejecución para el dashboard de resultados ────────────────
+    /** Latencia en ms de cada llamada al LLM (una entrada por paso). RQ2 */
+    private final List<Long> latencyTimeline = new ArrayList<>();
+    /** Acciones inválidas / alucinaciones detectadas en este run. RQ4 */
+    private int invalidActions = 0;
+    /** true cuando el agente llama a stopTestExecution con éxito. RQ1 */
+    private boolean completedSuccess = false;
+
     /**
      * Constructs a new LlmMcpAgent with the specified configuration.
      * 
@@ -223,6 +231,7 @@ public class LlmMcpAgent {
 
                 addInfoLog(String.format("LLM Inference Latency: %d ms (Provider: %s)", latencyMs,
                         aiProvider.getModelName()));
+                latencyTimeline.add(latencyMs); // RQ2: acumula latencia por paso
 
                 // Parse the response based on the Split + Verbose schema
                 Map<?, ?> parsedResponse;
@@ -231,6 +240,7 @@ public class LlmMcpAgent {
                 } catch (JsonProcessingException e) {
                     addSevereLog("The LLM failed to return a proper JSON. Attempting recovery...");
                     addSevereLog("Raw Output: " + jsonResponse);
+                    invalidActions++; // RQ4: JSON malformado = alucinación de formato
                     currentUserContext = "ERROR: Your last response was not valid JSON. You MUST return ONLY a JSON object with 'thought' and 'action' keys. Try again.";
                     continue;
                 }
@@ -258,6 +268,7 @@ public class LlmMcpAgent {
                 if (action == null || !action.containsKey("toolName")) {
                     String feedback = "ISSUE: No 'action' block or 'toolName' provided. Please review.";
                     addSevereLog(feedback);
+                    invalidActions++; // RQ4: acción inválida / alucinación estructural
                     currentUserContext = "Error: Invalid JSON schema. 'action' block missing or 'toolName' empty. Follow strictly the format.";
                     continue;
                 }
@@ -275,6 +286,8 @@ public class LlmMcpAgent {
 
                 if (McpNames.of(McpInterface::stopTestExecution).equals(toolName)) {
                     addInfoLog("LLM agent decided to stop the test execution.");
+                    completedSuccess = true; // RQ1: el agente completó el objetivo
+                    writeMetricsJs(step + 1);
                     return "LLM agent decided to stop the test execution";
                 }
 
@@ -310,6 +323,7 @@ public class LlmMcpAgent {
                     }
                 } else {
                     addSevereLog("LLM provider error: " + e.getMessage());
+                    writeMetricsJs(step);
                     return "Stop execution due to LLM provider error: " + e.getHttpStatusCode();
                 }
             } catch (Exception e) {
@@ -320,8 +334,135 @@ public class LlmMcpAgent {
 
         mcpInterface.stopTestExecution();
         addInfoLog("maxAction executed");
+        writeMetricsJs(step);
         return "maxAction executed";
     }
+
+    // ── Métricas: escritura de mcp_metrics.js ──────────────────────────────────
+
+    /**
+     * Escribe (o actualiza) mcp_metrics.js en el directorio de trabajo.
+     * Acumula los resultados de todos los runs en mcp_all_runs.json para
+     * poder comparar modelos en el dashboard después de varias ejecuciones.
+     *
+     * @param totalSteps número de pasos que ejecutó el agente en este run
+     */
+    @SuppressWarnings("unchecked")
+    private void writeMetricsJs(int totalSteps) {
+        try {
+            // Si el bat exporta MCP_DATA_DIR, los datos van a experiment_data\ (estable entre builds).
+            // Si no, caen al directorio de trabajo (compatibilidad con ejecuciones directas).
+            String dataDir = System.getenv("MCP_DATA_DIR");
+            String basePath = (dataDir != null && !dataDir.isEmpty()) ? dataDir + java.io.File.separator : "";
+
+            java.io.File accFile = new java.io.File(basePath + "mcp_all_runs.json");
+
+            // 1. Cargar runs previos (si existen)
+            List<Map<String, Object>> allRuns;
+            if (accFile.exists()) {
+                allRuns = mapper.readValue(accFile,
+                    new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
+            } else {
+                allRuns = new ArrayList<>();
+            }
+
+            // 2. Construir entrada del run actual
+            Map<String, Object> run = new java.util.LinkedHashMap<>();
+            run.put("runId",          "run-" + (allRuns.size() + 1));
+            run.put("timestamp",      new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm:ss")
+                                          .format(new java.util.Date()));
+            run.put("model",          aiProvider.getModelName());
+            String firstLine = this.bddInstructions.split("[\r\n]+")[0].trim();
+            run.put("testGoal",       firstLine.length() > 80 ? firstLine.substring(0, 80) + "…" : firstLine);
+            run.put("success",        completedSuccess);
+            run.put("totalSteps",     totalSteps);
+            run.put("invalidActions", invalidActions);
+            long avgLat = latencyTimeline.isEmpty() ? 0L
+                : latencyTimeline.stream().mapToLong(l -> l).sum() / latencyTimeline.size();
+            run.put("avgLatencyMs",   avgLat);
+            run.put("latencyTimeline", latencyTimeline);
+            allRuns.add(run);
+
+            // 3. Persistir JSON acumulado
+            mapper.writeValue(accFile, allRuns);
+
+            // 4. Agregar por modelo para las gráficas comparativas
+            Map<String, List<Map<String, Object>>> byModel = new java.util.LinkedHashMap<>();
+            for (Map<String, Object> r : allRuns) {
+                String m = (String) r.get("model");
+                byModel.computeIfAbsent(m, k -> new ArrayList<>()).add(r);
+            }
+
+            List<Map<String, Object>> models = new ArrayList<>();
+            for (Map.Entry<String, List<Map<String, Object>>> entry : byModel.entrySet()) {
+                List<Map<String, Object>> mrs = entry.getValue();
+                int rCount  = mrs.size();
+                long sucCnt = mrs.stream().filter(r -> Boolean.TRUE.equals(r.get("success"))).count();
+                double aSteps = mrs.stream().mapToInt(r -> ((Number) r.get("totalSteps")).intValue()).average().orElse(0);
+                double aLat   = mrs.stream().mapToLong(r -> ((Number) r.get("avgLatencyMs")).longValue()).average().orElse(0);
+                double aHall  = mrs.stream().mapToInt(r -> ((Number) r.get("invalidActions")).intValue()).average().orElse(0);
+
+                Map<String, Object> mMap = new java.util.LinkedHashMap<>();
+                mMap.put("name",              entry.getKey());
+                mMap.put("type",              inferModelType(entry.getKey()));
+                mMap.put("runs",              rCount);
+                mMap.put("successRate",       Math.round(100.0 * sucCnt / rCount));
+                mMap.put("avgSteps",          (long) Math.round(aSteps));
+                mMap.put("avgLatencyMs",      (long) Math.round(aLat));
+                mMap.put("avgHallucinations", Math.round(aHall * 10.0) / 10.0);
+                mMap.put("avgTokens",         0); // ampliable cuando los providers expongan el conteo
+                models.add(mMap);
+            }
+
+            // 5. Metadata del run actual
+            Map<String, Object> meta = new java.util.LinkedHashMap<>();
+            meta.put("lastRunId",   run.get("runId"));
+            meta.put("timestamp",   run.get("timestamp"));
+            meta.put("lastRunGoal", run.get("testGoal"));
+            meta.put("totalRuns",   allRuns.size());
+
+            Map<String, Object> dashData = new java.util.LinkedHashMap<>();
+            dashData.put("meta",            meta);
+            dashData.put("models",          models);
+            dashData.put("latencyTimeline", latencyTimeline);
+            dashData.put("runs",            allRuns);
+
+            // 6. Escribir mcp_metrics.js en la ruta estable y también en el working dir
+            //    (el dashboard del run necesita el .js en la misma carpeta que él)
+            String js = "var mcpMetricsData = " + mapper.writeValueAsString(dashData) + ";";
+            byte[] jsBytes = js.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            java.nio.file.Files.write(java.nio.file.Paths.get(basePath + "mcp_metrics.js"), jsBytes);
+            if (!basePath.isEmpty()) {
+                // También en el working dir para que HtmlSummaryHandler lo copie al resultado
+                java.nio.file.Files.write(java.nio.file.Paths.get("mcp_metrics.js"), jsBytes);
+            }
+
+            addInfoLog(String.format(
+                "✅ mcp_metrics.js actualizado · %d run(s) acumulados · modelo: %s · éxito: %b · alucinaciones: %d",
+                allRuns.size(), aiProvider.getModelName(), completedSuccess, invalidActions));
+
+        } catch (Exception e) {
+            addSevereLog("Error al escribir mcp_metrics.js: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Infiere el tipo de despliegue del modelo a partir de su nombre.
+     * Usado por el dashboard para colorear y agrupar los resultados.
+     */
+    private String inferModelType(String modelName) {
+        String l = modelName.toLowerCase();
+        if (l.contains("llama") || l.contains("gemma") || l.contains("phi")
+                || l.contains("qwen") || l.contains("deepseek")) {
+            return "Local";
+        }
+        if (l.contains("mistral") || l.contains("mixtral")) {
+            return "Hybrid";
+        }
+        return "SaaS";
+    }
+
+    // ── Logging helpers ────────────────────────────────────────────────────────
 
     private void addInfoLog(String msg) {
         LOGGER.log(Level.INFO, msg);
