@@ -69,6 +69,9 @@ public class OpenAiProvider implements LlmProvider {
 
     private List<Map<String, Object>> registeredTools;
 
+    /** Total tokens consumed in the last {@link #executePrompt} call (prompt + completion). */
+    private volatile int lastTokenUsage = 0;
+
     /**
      * Constructs a new OpenAiProvider with the specified configuration.
      * 
@@ -332,7 +335,7 @@ public class OpenAiProvider implements LlmProvider {
     }
 
     /**
-     * Logs token usage from the API response for monitoring.
+     * Logs token usage from the API response and stores the total for metrics.
      */
     private void logTokenUsage(String responseBody) {
         try {
@@ -344,9 +347,13 @@ public class OpenAiProvider implements LlmProvider {
                 return;
             }
 
-            Number promptTokens = asNumber(usage.get("prompt_tokens"));
+            Number promptTokens    = asNumber(usage.get("prompt_tokens"));
             Number completionTokens = asNumber(usage.get("completion_tokens"));
-            Number totalTokens = asNumber(usage.get("total_tokens"));
+            Number totalTokens     = asNumber(usage.get("total_tokens"));
+
+            if (totalTokens != null) {
+                this.lastTokenUsage = totalTokens.intValue();
+            }
 
             LOGGER.log(Level.INFO,
                     "Token usage: prompt={0}, completion={1}, total={2}",
@@ -355,6 +362,11 @@ public class OpenAiProvider implements LlmProvider {
         } catch (JsonProcessingException e) {
             LOGGER.log(Level.WARNING, "Could not parse token usage from response");
         }
+    }
+
+    @Override
+    public int getLastTokenUsage() {
+        return lastTokenUsage;
     }
 
     /**

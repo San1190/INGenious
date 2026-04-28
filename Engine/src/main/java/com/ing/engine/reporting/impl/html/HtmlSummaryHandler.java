@@ -205,11 +205,7 @@ public class HtmlSummaryHandler extends SummaryHandler implements PrimaryHandler
             FileUtils.copyFileToDirectory(new File(FilePath.getVideoReportHTMLPath()),
                     new File(FilePath.getCurrentResultsPath()));
         }
-        File sourceDashboard = new File("testar_metrics_dashboard.html");
-        if (sourceDashboard.exists()) {
-            FileUtils.copyFileToDirectory(sourceDashboard, new File(FilePath.getCurrentResultsPath()));
-        }
-        // mcp_metrics.js es escrito por LlmMcpAgent.writeMetricsJs() al directorio de trabajo
+        // mcp_metrics.js escrito por LlmMcpAgent — lo copiamos al results para que summary.html lo cargue
         File sourceMetricsJs = new File("mcp_metrics.js");
         if (sourceMetricsJs.exists()) {
             FileUtils.copyFileToDirectory(sourceMetricsJs, new File(FilePath.getCurrentResultsPath()));
@@ -235,11 +231,7 @@ public class HtmlSummaryHandler extends SummaryHandler implements PrimaryHandler
             FileUtils.writeStringToFile(new File(FilePath.getCurrentPerfReportHTMLPath()), perfHtml, Charset.defaultCharset());
 
         }
-        File sourceDashboard = new File("testar_metrics_dashboard.html");
-        if (sourceDashboard.exists()) {
-            FileUtils.copyFileToDirectory(sourceDashboard, new File(FilePath.getCurrentResultsPath()));
-        }
-        // mcp_metrics.js es escrito por LlmMcpAgent.writeMetricsJs() al directorio de trabajo
+        // mcp_metrics.js escrito por LlmMcpAgent — lo copiamos al results para que summary.html lo cargue
         File sourceMetricsJs = new File("mcp_metrics.js");
         if (sourceMetricsJs.exists()) {
             FileUtils.copyFileToDirectory(sourceMetricsJs, new File(FilePath.getCurrentResultsPath()));
@@ -291,11 +283,8 @@ public class HtmlSummaryHandler extends SummaryHandler implements PrimaryHandler
     public synchronized void launchResultSummary() {
         if (!isExtentEnabled()) {
             if (SystemDefaults.canLaunchSummary()) {
+                // Solo abrimos summary.html — las métricas están embebidas dentro
                 DesktopApi.open(new File(FilePath.getCurrentSummaryHTMLPath()));
-                File dashboard = new File(FilePath.getCurrentResultsPath() + File.separator + "testar_metrics_dashboard.html");
-                if (dashboard.exists()) {
-                    DesktopApi.open(dashboard);
-                }
             }
         }
     }

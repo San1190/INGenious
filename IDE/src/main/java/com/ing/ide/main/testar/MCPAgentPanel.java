@@ -50,7 +50,7 @@ public class MCPAgentPanel {
 		JPanel formPanel = new JPanel(new GridLayout(8, 2, 5, 5));
 
 		JLabel providerLabel = new JLabel("LLM Provider:");
-		String[] providers = { "OpenAI", "Gemini", "Local/Ollama", "Qwen/Ollama" };
+		String[] providers = { "OpenAI", "Gemini", "Ollama" };
 		JComboBox<String> providerCombo = new JComboBox<>(providers);
 		String providerDefault = settings.llmProviderName != null ? settings.llmProviderName : "OpenAI";
 		providerCombo.setSelectedItem(providerDefault);
@@ -83,11 +83,27 @@ public class MCPAgentPanel {
 		formPanel.add(apiKeyEnvVarField);
 
 		JLabel openaiLabel = new JLabel("Model:");
-		JTextField openaiTextField = new JTextField(40);
-		String modelDefault = settings.openaiModel != null ? settings.openaiModel : "gpt-4o";
-		openaiTextField.setText(modelDefault);
+		// Editable combobox — options change based on the selected provider
+		String[] ollamaModels = { "ministral-3:8b", "qwen2.5:7b", "qwen3:8b", "llama3.1", "llama3.2" };
+		String[] openaiModels = { "gpt-5.4-mini", "gpt-5.4-nano", "gpt-4.1", "gpt-4o", "gpt-4.1-mini", "gpt-4o-mini", "o4-mini", "o3-mini" };
+		String[] geminiModels = { "gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash" };
+
+		String[] initialModels;
+		if ("Ollama".equals(providerDefault))       initialModels = ollamaModels;
+		else if ("Gemini".equals(providerDefault))  initialModels = geminiModels;
+		else                                        initialModels = openaiModels;
+
+		JComboBox<String> modelCombo = new JComboBox<>(initialModels);
+		modelCombo.setEditable(true); // allows typing any custom model tag
+		String modelDefault;
+		if (settings.openaiModel != null && !settings.openaiModel.isBlank()) {
+			modelDefault = settings.openaiModel;
+		} else {
+			modelDefault = initialModels[0];
+		}
+		modelCombo.setSelectedItem(modelDefault);
 		formPanel.add(openaiLabel);
-		formPanel.add(openaiTextField);
+		formPanel.add(modelCombo);
 
 		JLabel visionLabel = new JLabel("Vision (if applies):");
 		JCheckBox visionCheckBox = new JCheckBox("Enable vision");
@@ -115,32 +131,29 @@ public class MCPAgentPanel {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				String selected = (String) providerCombo.getSelectedItem();
+				modelCombo.removeAllItems();
 				if ("Gemini".equals(selected)) {
+					for (String m : geminiModels) modelCombo.addItem(m);
 					customUrlField.setText("");
 					apiUrlField.setText("");
 					apiKeyEnvVarField.setText("GEMINI_API_KEY");
-					openaiTextField.setText("gemini-2.5-flash");
+					modelCombo.setSelectedItem("gemini-2.5-flash");
 					visionCheckBox.setSelected(true);
 					reasoningCombo.setSelectedItem("none");
 				} else if ("OpenAI".equals(selected)) {
+					for (String m : openaiModels) modelCombo.addItem(m);
 					customUrlField.setText("");
 					apiUrlField.setText("https://api.openai.com/v1/chat/completions");
 					apiKeyEnvVarField.setText("OPENAI_API_KEY");
-					openaiTextField.setText("gpt-4o");
+					modelCombo.setSelectedItem("gpt-4o");
 					visionCheckBox.setSelected(true);
 					reasoningCombo.setSelectedItem("none");
-				} else if ("Local/Ollama".equals(selected)) {
-					customUrlField.setText("http://localhost:11434/api/generate");
-					apiUrlField.setText("");
-					apiKeyEnvVarField.setText("");
-					openaiTextField.setText("llama3.1");
-					visionCheckBox.setSelected(false);
-					reasoningCombo.setSelectedItem("none");
-				} else if ("Qwen/Ollama".equals(selected)) {
+				} else if ("Ollama".equals(selected)) {
+					for (String m : ollamaModels) modelCombo.addItem(m);
 					customUrlField.setText("http://localhost:11434/api/chat");
 					apiUrlField.setText("");
 					apiKeyEnvVarField.setText("");
-					openaiTextField.setText("qwen2.5:7b");
+					modelCombo.setSelectedItem("ministral-3:8b");
 					visionCheckBox.setSelected(false);
 					reasoningCombo.setSelectedItem("none");
 				}
@@ -173,7 +186,8 @@ public class MCPAgentPanel {
 			settings.customApiUrl = customUrlField.getText().trim();
 			settings.apiUrl = apiUrlField.getText().trim();
 			settings.apiKeyEnvVarName = apiKeyEnvVarField.getText().trim();
-			settings.openaiModel = openaiTextField.getText().trim();
+			Object selectedModel = modelCombo.getSelectedItem();
+			settings.openaiModel = selectedModel != null ? selectedModel.toString().trim() : "";
 			settings.vision = visionCheckBox.isSelected();
 			settings.reasoningLevel = (String) reasoningCombo.getSelectedItem();
 			settings.maxActions = (Integer) actionsSpinner.getValue();

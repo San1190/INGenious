@@ -77,6 +77,8 @@ public class LlmMcpAgent {
     private int invalidActions = 0;
     /** true cuando el agente llama a stopTestExecution con éxito. RQ1 */
     private boolean completedSuccess = false;
+    /** Total de tokens consumidos en este run (suma de todas las llamadas). RQ3 */
+    private int totalTokens = 0;
 
     /**
      * Constructs a new LlmMcpAgent with the specified configuration.
@@ -210,6 +212,8 @@ public class LlmMcpAgent {
                 "Use ONLY the tools provided to you. If you complete all asserts or test execution must end, use the stopTestExecution tool. Begin!";
 
         int step = 0;
+        int consecutiveFailures = 0;   // circuit-breaker: salida si el modelo falla N veces seguidas
+        final int MAX_CONSECUTIVE_FAILURES = 5;
         List<String> actionHistory = new ArrayList<>();
 
         // At the beginning, the context is the BDD list itself
@@ -233,15 +237,37 @@ public class LlmMcpAgent {
                         aiProvider.getModelName()));
                 latencyTimeline.add(latencyMs); // RQ2: acumula latencia por paso
 
-                // Parse the response based on the Split + Verbose schema
+                // RQ3: acumula tokens consumidos en este paso
+                int stepTokens = aiProvider.getLastTokenUsage();
+                if (stepTokens > 0) {
+                    totalTokens += stepTokens;
+                    addInfoLog(String.format("Token usage this step: %d | Total acumulado: %d", stepTokens, totalTokens));
+                }
+
+                // Parse the response based on the Split + Verbose schema.
+                // Pre-process: strip JS-style single-line comments (// ...) that some local
+                // models (Qwen, Mistral) inject inside the JSON, making it invalid.
+                String cleanedResponse = stripJsComments(jsonResponse);
+
                 Map<?, ?> parsedResponse;
                 try {
-                    parsedResponse = mapper.readValue(jsonResponse, Map.class);
+                    parsedResponse = mapper.readValue(cleanedResponse, Map.class);
+                    consecutiveFailures = 0; // reset on successful parse
                 } catch (JsonProcessingException e) {
                     addSevereLog("The LLM failed to return a proper JSON. Attempting recovery...");
                     addSevereLog("Raw Output: " + jsonResponse);
                     invalidActions++; // RQ4: JSON malformado = alucinación de formato
-                    currentUserContext = "ERROR: Your last response was not valid JSON. You MUST return ONLY a JSON object with 'thought' and 'action' keys. Try again.";
+                    consecutiveFailures++;
+                    step++; // FIX: avanzar el contador para no quedarse bloqueado en el mismo step
+                    if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+                        addSevereLog("Circuit-breaker: " + MAX_CONSECUTIVE_FAILURES
+                                + " fallos consecutivos de parseo JSON. Abortando run.");
+                        writeMetricsJs(step);
+                        return "Aborted: too many consecutive JSON parse failures";
+                    }
+                    currentUserContext = "ERROR: Your last response was not valid JSON. "
+                            + "Do NOT add any comments (// or /* */) inside the JSON — JSON does not support comments. "
+                            + "Return ONLY a raw JSON object with 'thought' and 'action' keys, no markdown, no comments.";
                     continue;
                 }
 
@@ -309,6 +335,7 @@ public class LlmMcpAgent {
                 currentUserContext += "\n\nPast Action History:\n" + String.join("\n", actionHistory);
                 currentUserContext += "\n\nPending BDD:\n" + this.bddInstructions;
 
+                consecutiveFailures = 0; // acción ejecutada con éxito — reset del circuit-breaker
                 step++;
 
             } catch (LlmProviderException e) {
@@ -329,6 +356,32 @@ public class LlmMcpAgent {
             } catch (Exception e) {
                 addSevereLog("LLM step failed: " + e.getMessage());
                 e.printStackTrace();
+
+                // FIX: detectar TargetClosedError de Playwright (navegador cerrado inesperadamente).
+                // Si el browser ya está cerrado es imposible continuar — abortamos el run limpiamente
+                // en lugar de entrar en un bucle infinito intentando usar una página muerta.
+                String exClass = e.getClass().getSimpleName();
+                String cause   = (e.getCause() != null) ? e.getCause().getClass().getSimpleName() : "";
+                if ("TargetClosedError".equals(exClass) || "TargetClosedError".equals(cause)
+                        || (e.getMessage() != null && e.getMessage().contains("Target page")
+                            && e.getMessage().contains("closed"))) {
+                    addSevereLog("FATAL: El navegador Playwright se cerró inesperadamente. Abortando run.");
+                    writeMetricsJs(step);
+                    return "Aborted: Playwright browser closed unexpectedly (TargetClosedError)";
+                }
+
+                // Para cualquier otro error: incrementar step y circuit-breaker
+                // para evitar bucles infinitos en casos inesperados.
+                consecutiveFailures++;
+                step++;
+                if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+                    addSevereLog("Circuit-breaker: " + MAX_CONSECUTIVE_FAILURES
+                            + " errores consecutivos. Abortando run.");
+                    writeMetricsJs(step);
+                    return "Aborted: too many consecutive step failures";
+                }
+                currentUserContext = "ERROR in previous step: " + e.getMessage()
+                        + "\nReview your last action and try a different approach.";
             }
         }
 
@@ -377,6 +430,7 @@ public class LlmMcpAgent {
             run.put("success",        completedSuccess);
             run.put("totalSteps",     totalSteps);
             run.put("invalidActions", invalidActions);
+            run.put("totalTokens",    totalTokens);
             long avgLat = latencyTimeline.isEmpty() ? 0L
                 : latencyTimeline.stream().mapToLong(l -> l).sum() / latencyTimeline.size();
             run.put("avgLatencyMs",   avgLat);
@@ -399,8 +453,12 @@ public class LlmMcpAgent {
                 int rCount  = mrs.size();
                 long sucCnt = mrs.stream().filter(r -> Boolean.TRUE.equals(r.get("success"))).count();
                 double aSteps = mrs.stream().mapToInt(r -> ((Number) r.get("totalSteps")).intValue()).average().orElse(0);
-                double aLat   = mrs.stream().mapToLong(r -> ((Number) r.get("avgLatencyMs")).longValue()).average().orElse(0);
-                double aHall  = mrs.stream().mapToInt(r -> ((Number) r.get("invalidActions")).intValue()).average().orElse(0);
+                double aLat    = mrs.stream().mapToLong(r -> ((Number) r.get("avgLatencyMs")).longValue()).average().orElse(0);
+                double aHall   = mrs.stream().mapToInt(r -> ((Number) r.get("invalidActions")).intValue()).average().orElse(0);
+                double aTokens = mrs.stream().mapToInt(r -> {
+                    Object t = r.get("totalTokens");
+                    return (t instanceof Number) ? ((Number) t).intValue() : 0;
+                }).average().orElse(0);
 
                 Map<String, Object> mMap = new java.util.LinkedHashMap<>();
                 mMap.put("name",              entry.getKey());
@@ -410,7 +468,7 @@ public class LlmMcpAgent {
                 mMap.put("avgSteps",          (long) Math.round(aSteps));
                 mMap.put("avgLatencyMs",      (long) Math.round(aLat));
                 mMap.put("avgHallucinations", Math.round(aHall * 10.0) / 10.0);
-                mMap.put("avgTokens",         0); // ampliable cuando los providers expongan el conteo
+                mMap.put("avgTokens",         (long) Math.round(aTokens));
                 models.add(mMap);
             }
 
@@ -452,14 +510,74 @@ public class LlmMcpAgent {
      */
     private String inferModelType(String modelName) {
         String l = modelName.toLowerCase();
+        // Models that run fully locally via Ollama
         if (l.contains("llama") || l.contains("gemma") || l.contains("phi")
-                || l.contains("qwen") || l.contains("deepseek")) {
+                || l.contains("qwen") || l.contains("deepseek")
+                || l.contains("ministral") || l.contains("mistral")
+                || l.contains("mixtral")) {
             return "Local";
         }
-        if (l.contains("mistral") || l.contains("mixtral")) {
-            return "Hybrid";
-        }
         return "SaaS";
+    }
+
+    // ── JSON pre-processing ────────────────────────────────────────────────────
+
+    /**
+     * Strips JavaScript-style single-line comments ({@code // ...}) from a JSON
+     * string before parsing.
+     *
+     * <p>
+     * Some local models (notably Qwen 2.5 via OllamaProvider and Mistral) insert
+     * {@code //} comments inside their JSON output when reasoning about what
+     * selector to use. Standard {@link com.fasterxml.jackson.databind.ObjectMapper}
+     * rejects these as invalid JSON, causing an infinite parse-fail loop.
+     * This pre-processing step removes trailing comments on each line so that
+     * the rest of the pipeline can parse the response normally.
+     * </p>
+     *
+     * <p>
+     * The removal is line-by-line and only strips text after {@code //} that
+     * appears <em>outside</em> a string literal (simple heuristic: the {@code //}
+     * must not be preceded by an odd number of unescaped double-quotes on the
+     * same line).
+     * </p>
+     *
+     * @param raw the raw string returned by the LLM
+     * @return the string with JS comments removed, or the original if null/blank
+     */
+    private String stripJsComments(String raw) {
+        if (raw == null || raw.isBlank()) return raw;
+        // Process line by line: remove everything after // that is outside a string
+        StringBuilder sb = new StringBuilder();
+        for (String line : raw.split("\n", -1)) {
+            sb.append(stripLineComment(line)).append('\n');
+        }
+        return sb.toString().trim();
+    }
+
+    /**
+     * Removes a trailing {@code // ...} comment from a single JSON line.
+     * Uses a simple quote-counting heuristic to avoid stripping {@code //}
+     * that appears inside a string value.
+     */
+    private String stripLineComment(String line) {
+        boolean inString = false;
+        for (int i = 0; i < line.length(); i++) {
+            char c = line.charAt(i);
+            if (c == '"' && (i == 0 || line.charAt(i - 1) != '\\')) {
+                inString = !inString;
+            }
+            if (!inString && c == '/' && i + 1 < line.length() && line.charAt(i + 1) == '/') {
+                // Found // outside a string — trim from here and remove trailing comma if any
+                String before = line.substring(0, i).stripTrailing();
+                if (before.endsWith(",")) {
+                    // Keep the comma — it belongs to the JSON structure; just drop the comment
+                    return before;
+                }
+                return before;
+            }
+        }
+        return line;
     }
 
     // ── Logging helpers ────────────────────────────────────────────────────────

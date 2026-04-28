@@ -42,6 +42,9 @@ import java.util.Map;
  * @version 1.0
  * @since 2024
  * @see OpenAiProvider
+ * @see GeminiProvider
+ * @see OllamaProvider
+ * @see LlmProviderFactory
  * @see LlmMcpAgent
  */
 public interface LlmProvider {
@@ -91,8 +94,21 @@ public interface LlmProvider {
     /**
      * Checks if the current model is a reasoning model that supports
      * reasoning effort configuration.
-     * 
+     *
      * @return {@code true} if the model supports reasoning effort parameter
      */
     boolean isReasoningModel();
+
+    /**
+     * Returns the total number of tokens consumed in the last call to
+     * {@link #executePrompt(String, String)} (prompt + completion combined).
+     *
+     * <p>Implementations that do not expose token counts should return {@code 0}.
+     * The default implementation returns {@code 0} for backward compatibility.</p>
+     *
+     * @return token count from the last API call, or {@code 0} if unavailable
+     */
+    default int getLastTokenUsage() {
+        return 0;
+    }
 }

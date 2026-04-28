@@ -30,6 +30,9 @@ public class GeminiProvider implements LlmProvider {
     private final ObjectMapper objectMapper;
     private List<Map<String, Object>> registeredTools;
 
+    /** Total tokens consumed in the last {@link #executePrompt} call. */
+    private volatile int lastTokenUsage = 0;
+
     public GeminiProvider(String apiUrl, String apiKey, String model) {
         if (apiUrl == null || apiUrl.isBlank()) {
             this.apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/"
@@ -96,6 +99,19 @@ public class GeminiProvider implements LlmProvider {
 
             // Extract the generated text
             Map<?, ?> responseMap = objectMapper.readValue(response.body(), Map.class);
+
+            // Parse token usage from usageMetadata (available in all Gemini responses)
+            try {
+                Map<?, ?> usageMeta = (Map<?, ?>) responseMap.get("usageMetadata");
+                if (usageMeta != null) {
+                    Object total = usageMeta.get("totalTokenCount");
+                    if (total instanceof Number) {
+                        this.lastTokenUsage = ((Number) total).intValue();
+                        LOGGER.log(Level.INFO, "Gemini token usage: total={0}", this.lastTokenUsage);
+                    }
+                }
+            } catch (Exception ignored) { /* token count is optional */ }
+
             List<?> candidates = (List<?>) responseMap.get("candidates");
             if (candidates != null && !candidates.isEmpty()) {
                 Map<?, ?> firstCandidate = (Map<?, ?>) candidates.get(0);
@@ -123,6 +139,11 @@ public class GeminiProvider implements LlmProvider {
         } catch (IOException | InterruptedException e) {
             throw new LlmProviderException("Communication error with Gemini API", e);
         }
+    }
+
+    @Override
+    public int getLastTokenUsage() {
+        return lastTokenUsage;
     }
 
     @Override
