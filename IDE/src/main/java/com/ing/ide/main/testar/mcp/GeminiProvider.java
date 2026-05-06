@@ -4,9 +4,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -82,8 +84,9 @@ public class GeminiProvider implements LlmProvider {
 
             String requestBodyJson = objectMapper.writeValueAsString(requestBody);
 
+            String encodedKey = URLEncoder.encode(this.apiKey, StandardCharsets.UTF_8);
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(this.apiUrl + "?key=" + this.apiKey))
+                    .uri(URI.create(this.apiUrl + "?key=" + encodedKey))
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(requestBodyJson))
                     .build();

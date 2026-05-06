@@ -453,7 +453,13 @@
             // ── Render funciones ──────────────────────────────────────────
 
             function renderProgress() {
-                var stats = groupByModel(ALL_RUNS);
+                var f = _mcpFilter;
+                var baseRuns = ALL_RUNS.filter(function(r) {
+                    if (f.model !== '__all__' && r.model !== f.model) return false;
+                    if (f.story !== '__all__' && storyLabel(r.testGoal) !== f.story) return false;
+                    return true;
+                });
+                var stats = groupByModel(baseRuns);
                 var rows = Object.keys(stats).map(function(name) {
                     var d = stats[name];
                     var valid = d.ok + d.fail;
@@ -630,6 +636,7 @@
             // ── Render completo ───────────────────────────────────────────
             function renderAll() {
                 var runs = filteredRuns();
+                renderProgress();
                 renderKpis(runs);
                 renderCharts(runs);
                 renderRunsTable(runs);

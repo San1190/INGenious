@@ -47,7 +47,7 @@ public class MCPAgentPanel {
 		JPanel inputPanel = new JPanel();
 		inputPanel.setLayout(new BorderLayout());
 
-		JPanel formPanel = new JPanel(new GridLayout(8, 2, 5, 5));
+		JPanel formPanel = new JPanel(new GridLayout(9, 2, 5, 5));
 
 		JLabel providerLabel = new JLabel("LLM Provider:");
 		String[] providers = { "OpenAI", "Gemini", "Ollama" };
@@ -127,6 +127,13 @@ public class MCPAgentPanel {
 		formPanel.add(actionsLabel);
 		formPanel.add(actionsSpinner);
 
+		JLabel numRunsLabel = new JLabel("Num Runs (batch):");
+		JSpinner numRunsSpinner = new JSpinner(new SpinnerNumberModel(1, 1, 50, 1));
+		int numRunsDefault = settings.numRuns != null ? settings.numRuns : 1;
+		numRunsSpinner.setValue(numRunsDefault);
+		formPanel.add(numRunsLabel);
+		formPanel.add(numRunsSpinner);
+
 		providerCombo.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
@@ -191,6 +198,7 @@ public class MCPAgentPanel {
 			settings.vision = visionCheckBox.isSelected();
 			settings.reasoningLevel = (String) reasoningCombo.getSelectedItem();
 			settings.maxActions = (Integer) actionsSpinner.getValue();
+			settings.numRuns = (Integer) numRunsSpinner.getValue();
 			settings.bddText = bddTextArea.getText();
 
 			// keep in-memory default in sync as well
@@ -203,29 +211,39 @@ public class MCPAgentPanel {
 			public void actionPerformed(ActionEvent e) {
 				saveFromUi.run();
 
+				final int totalRuns = settings.numRuns != null ? settings.numRuns : 1;
+				final int maxActions = settings.maxActions != null ? settings.maxActions : 10;
+
 				// Disable interaction with the dialog panel elements
 				setComponentsEnabled(dialog.getContentPane(), false);
 				dialog.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
 
-				// We load the factory instead of instancing OpenAi provider directly
-				com.ing.ide.main.testar.mcp.LlmProvider llmProvider = com.ing.ide.main.testar.mcp.LlmProviderFactory
-						.getProvider(settings);
-
-				LlmMcpAgent llmMcpAgent = new LlmMcpAgent(
-						sMainFrame.getProject(),
-						llmProvider,
-						settings.maxActions != null ? settings.maxActions : 10,
-						settings.bddText);
-
-				SwingWorker<String, Void> worker = new SwingWorker<String, Void>() {
+				SwingWorker<Void, String> worker = new SwingWorker<Void, String>() {
 					@Override
-					protected String doInBackground() throws Exception {
-						return llmMcpAgent.runLLMAgent();
+					protected Void doInBackground() throws Exception {
+						for (int i = 1; i <= totalRuns; i++) {
+							// Update button label with progress on the EDT
+							final int current = i;
+							SwingUtilities.invokeLater(() ->
+								launchButton.setText("Run " + current + "/" + totalRuns + " …")
+							);
+
+							// Each run gets its own fresh LlmProvider and LlmMcpAgent
+							com.ing.ide.main.testar.mcp.LlmProvider llmProvider =
+								com.ing.ide.main.testar.mcp.LlmProviderFactory.getProvider(settings);
+							LlmMcpAgent llmMcpAgent = new LlmMcpAgent(
+								sMainFrame.getProject(),
+								llmProvider,
+								maxActions,
+								settings.bddText);
+							llmMcpAgent.runLLMAgent();
+						}
+						return null;
 					}
 
 					@Override
 					protected void done() {
-						// Enable interaction with the panel when the worker is finished
+						launchButton.setText("Launch");
 						setComponentsEnabled(dialog.getContentPane(), true);
 						dialog.setCursor(Cursor.getDefaultCursor());
 					}

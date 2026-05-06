@@ -350,7 +350,13 @@ public class LlmMcpAgent {
                     }
                 } else {
                     addSevereLog("LLM provider error: " + e.getMessage());
-                    writeMetricsJs(step);
+                    // Si el error es 403 (acceso denegado al proyecto) no registramos el run —
+                    // es un error de configuración/API, no un resultado experimental válido.
+                    if (e.getHttpStatusCode() == 403) {
+                        addSevereLog("Run descartado de métricas: error 403 (acceso denegado al proyecto API). Corrige la API key o los permisos del proyecto y reintenta.");
+                    } else {
+                        writeMetricsJs(step);
+                    }
                     return "Stop execution due to LLM provider error: " + e.getHttpStatusCode();
                 }
             } catch (Exception e) {
@@ -425,8 +431,8 @@ public class LlmMcpAgent {
             run.put("timestamp",      new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm:ss")
                                           .format(new java.util.Date()));
             run.put("model",          aiProvider.getModelName());
-            String firstLine = this.bddInstructions.split("[\r\n]+")[0].trim();
-            run.put("testGoal",       firstLine.length() > 80 ? firstLine.substring(0, 80) + "…" : firstLine);
+            // Guardar el BDD completo para que el dashboard distinga H1/H2/H3
+            run.put("testGoal",       this.bddInstructions.trim());
             run.put("success",        completedSuccess);
             run.put("totalSteps",     totalSteps);
             run.put("invalidActions", invalidActions);
