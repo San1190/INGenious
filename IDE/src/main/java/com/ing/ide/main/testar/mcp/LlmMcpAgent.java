@@ -46,8 +46,8 @@ import java.util.logging.Logger;
  * <h2>Supported Providers</h2>
  * <ul>
  * <li>{@link OpenAiProvider} - OpenAI and Azure OpenAI</li>
- * <li>GeminiProvider - Google Gemini (future)</li>
- * <li>LlamaProvider - Meta Llama via local or cloud (future)</li>
+ * <li>{@link GeminiProvider} - Google Gemini</li>
+ * <li>{@link OllamaProvider} - Modelos locales via Ollama (Llama, Qwen, Mistral, etc.)</li>
  * </ul>
  * 
  * @author TFG-MCP-TESTAR Team
