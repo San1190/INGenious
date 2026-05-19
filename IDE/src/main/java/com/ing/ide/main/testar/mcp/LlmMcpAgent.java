@@ -443,8 +443,11 @@ public class LlmMcpAgent {
             run.put("latencyTimeline", latencyTimeline);
             allRuns.add(run);
 
-            // 3. Persistir JSON acumulado
-            mapper.writeValue(accFile, allRuns);
+            // 3. Persistir JSON acumulado (escritura atómica: tmp → rename)
+            java.io.File tmpFile = new java.io.File(accFile.getParent(), "mcp_all_runs.json.tmp");
+            mapper.writeValue(tmpFile, allRuns);
+            if (accFile.exists()) accFile.delete();
+            tmpFile.renameTo(accFile);
 
             // 4. Agregar por modelo para las gráficas comparativas
             Map<String, List<Map<String, Object>>> byModel = new java.util.LinkedHashMap<>();
